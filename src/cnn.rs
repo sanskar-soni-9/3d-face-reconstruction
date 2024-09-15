@@ -1,5 +1,5 @@
 use core::panic;
-pub use layer::LayerType;
+use layer::LayerType;
 use layer::{convolutional_layer::*, max_polling_layer::*};
 use ndarray::Array3;
 
@@ -25,6 +25,10 @@ impl CNN {
     }
 
     pub fn add_convolutional_layer(&mut self, filters: usize, kernel_size: usize, strides: usize) {
+        if strides == 0 {
+            panic!("Stride should be greater than 0.");
+        }
+
         let layer = match self.layers.last() {
             Some(layer) => match layer {
                 LayerType::ConvolutionalLayer(_) => {
@@ -41,6 +45,10 @@ impl CNN {
     }
 
     pub fn add_max_polling_layer(&mut self, kernel_size: usize, strides: usize) {
+        if strides == 0 {
+            panic!("Stride should be greater than 0.");
+        }
+
         let layer = match self.layers.last() {
             None => panic!("Need Convolutional Layer Before Max Polling Layer."),
             Some(layer) => match layer {
