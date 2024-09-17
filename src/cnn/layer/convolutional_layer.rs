@@ -69,7 +69,7 @@ impl LayerTrait for ConvolutionalLayer {
     }
 
     fn backward_propogate(&mut self, error: Array3<f32>) -> Array3<f32> {
-        // Yet to implement
+        // TODO: implement
         error
     }
 }

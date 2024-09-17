@@ -42,13 +42,8 @@ pub struct Dataset {
     pub labels: Vec<Labels>,
 }
 
-impl Default for Dataset {
-    fn default() -> Self {
-        Self::new()
-    }
-}
 impl Dataset {
-    fn get_headers() -> Vec<String> {
+    pub fn get_headers() -> Vec<String> {
         vec![
             "image_path".to_string(),
             "color_para".to_string(),
@@ -63,8 +58,8 @@ impl Dataset {
             "pts_3d".to_string(),
         ]
     }
-    pub fn new() -> Dataset {
-        let mut data_file = csv::Reader::from_path([DEFAULT_DATA_DIR, "afw.csv"].concat()).unwrap();
+    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
+        let mut data_file = csv::Reader::from_path([DEFAULT_DATA_DIR, "afw.csv"].concat())?;
         let mut labels: Vec<Labels> = vec![];
         let mut image_path = String::new();
         let mut color_para = [0.0; 7];
@@ -111,21 +106,23 @@ impl Dataset {
             })
         }
 
-        Dataset { labels }
+        Ok(Dataset { labels })
     }
 
-    pub fn prepare() {
+    pub fn prepare() -> Self {
         let data = Self::get_afw_mat_data();
         let mut output_file = csv::WriterBuilder::new()
             .from_path([DEFAULT_DATA_DIR, "afw.csv"].concat())
             .expect("Error creating/writing afw.csv file");
 
-        for record in data.labels {
+        for record in &data.labels {
             output_file.serialize(record).unwrap();
         }
         output_file
             .flush()
             .expect("Error while saving csv file afw.csv.");
+
+        data
     }
 
     fn get_afw_mat_data() -> Self {
@@ -147,7 +144,6 @@ impl Dataset {
             if !file_ext.eq("jpg") {
                 continue;
             }
-            println!("File Found: {}{}", img_dir_path, file_name);
 
             let image_labels = Self::get_labels_from_mat(
                 &[
@@ -204,7 +200,6 @@ impl Dataset {
                             }
                             _ => panic!("Unexpected Data"),
                         };
-                        println!("Success color_para");
                     }
                     "exp_para" => {
                         exp_para = match array.data() {
@@ -213,7 +208,6 @@ impl Dataset {
                             }
                             _ => panic!("Unexpected Data"),
                         };
-                        println!("Success exp_para");
                     }
                     "illum_para" => {
                         illum_para = match array.data() {
@@ -222,7 +216,6 @@ impl Dataset {
                             }
                             _ => panic!("Unexpected Data"),
                         };
-                        println!("Success illum_para");
                     }
                     "pose_para" => {
                         pose_para = match array.data() {
@@ -234,7 +227,6 @@ impl Dataset {
                             }
                             _ => panic!("Unexpected Data"),
                         };
-                        println!("Success pose_para");
                     }
                     "shape_para" => {
                         shape_para = match array.data() {
@@ -243,7 +235,6 @@ impl Dataset {
                             }
                             _ => panic!("Unexpected Data"),
                         };
-                        println!("Success shape_para");
                     }
                     "tex_para" => {
                         tex_para = match array.data() {
@@ -252,14 +243,12 @@ impl Dataset {
                             }
                             _ => panic!("Unexpected Data"),
                         };
-                        println!("Success tex_para");
                     }
                     "roi" => {
                         roi = match array.data() {
                             matfile::NumericData::Int16 { real, imag: _ } => vec_to_i16_array(real),
                             _ => panic!("Unexpected Data"),
                         };
-                        println!("Success roi");
                     }
                     "pt2d" => {
                         pt2d = match array.data() {
@@ -268,7 +257,6 @@ impl Dataset {
                             }
                             _ => panic!("Unexpected Data"),
                         };
-                        println!("Success pt2d");
                     }
                     "pts_2d" => {
                         pts_2d = match array.data() {
@@ -277,7 +265,6 @@ impl Dataset {
                             }
                             _ => panic!("Unexpected Data"),
                         };
-                        println!("Success pts_2d");
                     }
                     "pts_3d" => {
                         pts_3d = match array.data() {
@@ -286,7 +273,6 @@ impl Dataset {
                             }
                             _ => panic!("Unexpected Data"),
                         };
-                        println!("Success pts_3d");
                     }
                     _ => (),
                 }

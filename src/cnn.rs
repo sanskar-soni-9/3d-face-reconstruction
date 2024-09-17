@@ -68,7 +68,7 @@ impl CNN {
 
     pub fn train(&mut self, labels: Array3<f32>) {
         self.labels = labels;
-        // Yet to Implement
+        // TODO: implement
     }
 
     fn add_layer(&mut self, layer: LayerType) {

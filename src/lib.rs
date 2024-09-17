@@ -9,7 +9,7 @@ pub mod utils;
 
 pub fn infer(images: Vec<Array3<f32>>) {
     let mut cnn = init_cnn(0, images);
-    // Yet to Implement
+    // TODO: implement
 }
 
 pub fn train(images: Vec<Array3<f32>>) {

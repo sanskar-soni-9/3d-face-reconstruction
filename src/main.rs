@@ -20,8 +20,8 @@ fn main() {
     }
 }
 
-fn prepare_data() {
-    Dataset::prepare();
+fn prepare_data() -> Dataset {
+    Dataset::prepare()
 }
 
 fn infer_model(images: Vec<String>) {
@@ -30,7 +30,10 @@ fn infer_model(images: Vec<String>) {
 }
 
 fn train_model() {
-    let dataset = Dataset::new();
-    // let images = face_reconstruction::get_images(&images);
+    let dataset = Dataset::load().unwrap_or_else(|_| {
+        println!("CSV file not found, preparing dataset...");
+        prepare_data()
+    });
+    // let images = face_reconstruction::get_images();
     // face_reconstruction::train(images);
 }

@@ -50,7 +50,7 @@ impl LayerTrait for MaxPollingLayer {
     }
 
     fn backward_propogate(&mut self, error: Array3<f32>) -> Array3<f32> {
-        // Yet to Implement
+        // TODO: implement
         error
     }
 }
