@@ -1,8 +1,27 @@
-use face_reconstruction::{afw::Afw, config::DEFAULT_DATA_DIR};
-use std::env::Args;
+use face_reconstruction::dataset::Dataset;
 
 fn main() {
-    parse_args(std::env::args());
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.len() < 2 {
+        panic!("Invalid args...");
+    }
+
+    match args[1].as_str() {
+        "prepare" => {
+            prepare_data();
+        }
+        "train" => {
+            train_model();
+        }
+        _ => {
+            infer_model(args[1..2].to_vec()) // Currently only supporting 1
+        }
+    }
+}
+
+fn prepare_data() {
+    Dataset::prepare();
 }
 
 fn infer_model(images: Vec<String>) {
@@ -10,27 +29,8 @@ fn infer_model(images: Vec<String>) {
     face_reconstruction::infer(images);
 }
 
-fn train_model(images: Vec<String>) {
-    let images = face_reconstruction::get_images(&images);
-    face_reconstruction::train(images);
-}
-
-fn parse_args(args: Args) {
-    let args: Vec<String> = args.into_iter().collect();
-    println!("{}", args.len());
-    if args.len() < 2 {
-        panic!("Invalid args...");
-    }
-
-    if args[1] == "train" {
-        let path: String = args
-            .get(2)
-            .cloned()
-            .unwrap_or_else(|| DEFAULT_DATA_DIR.to_string());
-        let afw = Afw::new(&path);
-        train_model(afw.image_paths);
-        return;
-    }
-
-    infer_model(args[1..2].to_vec()); // Currently only supporting 1
+fn train_model() {
+    let dataset = Dataset::new();
+    // let images = face_reconstruction::get_images(&images);
+    // face_reconstruction::train(images);
 }

@@ -2,9 +2,10 @@ use cnn::INPUT_SIZE;
 use ndarray::Array3;
 use nshare::IntoNdarray3;
 
-pub mod afw;
 pub mod cnn;
 pub mod config;
+pub mod dataset;
+pub mod utils;
 
 pub fn infer(images: Vec<Array3<f32>>) {
     let mut cnn = init_cnn(0, images);
