@@ -1,4 +1,6 @@
-use cnn::INPUT_SIZE;
+use config::INPUT_SHAPE;
+use dataset::Dataset;
+use image::{imageops::FilterType, GenericImageView};
 use ndarray::Array3;
 use nshare::IntoNdarray3;
 
@@ -12,32 +14,41 @@ pub fn infer(images: Vec<Array3<f32>>) {
     // TODO: implement
 }
 
-pub fn train(images: Vec<Array3<f32>>) {
-    let mut cnn = init_cnn(3, images);
-    cnn.train(Array3::zeros(INPUT_SIZE));
+pub fn train(data: Dataset) {
+    let mut images = vec![];
+    for (i, label) in data.labels.iter().enumerate() {
+        // Temporary
+        if i == 10 {
+            break;
+        }
+        images.push(get_image(&label.image_path));
+    }
+    let mut cnn = init_cnn(1, images);
+    cnn.train(data.labels);
+}
+
+pub fn get_image(image_path: &str) -> Array3<f32> {
+    let mut image = match image::open(image_path) {
+        Ok(image) => image,
+        Err(message) => {
+            println!("Failed to read image: {}", message);
+            panic!("Error opnening image.");
+        }
+    };
+    if image.dimensions() != (INPUT_SHAPE.1 as u32, INPUT_SHAPE.2 as u32) {
+        image = image.resize_exact(
+            INPUT_SHAPE.1 as u32,
+            INPUT_SHAPE.2 as u32,
+            FilterType::Lanczos3,
+        );
+    }
+    image.into_rgb32f().into_ndarray3()
 }
 
 pub fn get_images(image_paths: &[String]) -> Vec<Array3<f32>> {
-    let mut images: Vec<Array3<f32>> = vec![];
-    for image_path in image_paths {
-        let image = match image::open(image_path) {
-            Ok(image) => image,
-            Err(message) => {
-                println!("Failed to read image: {}", message);
-                continue;
-            }
-        };
-        images.push(
-            image
-                .clone()
-                .resize_exact(
-                    INPUT_SIZE.1 as u32,
-                    INPUT_SIZE.2 as u32,
-                    image::imageops::FilterType::Nearest,
-                )
-                .to_rgb32f()
-                .into_ndarray3(),
-        );
+    let mut images = vec![];
+    for path in image_paths {
+        images.push(get_image(path));
     }
     images
 }

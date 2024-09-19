@@ -1,4 +1,4 @@
-use crate::config::DEFAULT_DATA_DIR;
+use crate::config::DATA_DIR;
 use crate::utils::*;
 use core::{f64, panic};
 use serde::{ser::SerializeStruct, Serialize};
@@ -59,7 +59,7 @@ impl Dataset {
         ]
     }
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
-        let mut data_file = csv::Reader::from_path([DEFAULT_DATA_DIR, "afw.csv"].concat())?;
+        let mut data_file = csv::Reader::from_path([DATA_DIR, "afw.csv"].concat())?;
         let mut labels: Vec<Labels> = vec![];
         let mut image_path = String::new();
         let mut color_para = [0.0; 7];
@@ -112,7 +112,7 @@ impl Dataset {
     pub fn prepare() -> Self {
         let data = Self::get_afw_mat_data();
         let mut output_file = csv::WriterBuilder::new()
-            .from_path([DEFAULT_DATA_DIR, "afw.csv"].concat())
+            .from_path([DATA_DIR, "afw.csv"].concat())
             .expect("Error creating/writing afw.csv file");
 
         for record in &data.labels {
@@ -126,7 +126,7 @@ impl Dataset {
     }
 
     fn get_afw_mat_data() -> Self {
-        let img_dir_path = [DEFAULT_DATA_DIR, "AFW/"].concat();
+        let img_dir_path = [DATA_DIR, "AFW/"].concat();
         let img_dir = fs::read_dir(&img_dir_path).unwrap_or_else(|e| {
             panic!(
                 "Error reading image directory: {}\nError: {}",
@@ -148,14 +148,14 @@ impl Dataset {
             let image_labels = Self::get_labels_from_mat(
                 &[
                     &[
-                        DEFAULT_DATA_DIR,
+                        DATA_DIR,
                         "AFW/",
                         file_name.split_terminator('.').next().unwrap(),
                         ".mat",
                     ]
                     .concat(),
                     &[
-                        DEFAULT_DATA_DIR,
+                        DATA_DIR,
                         "landmarks/AFW/",
                         file_name.split_terminator('.').next().unwrap(),
                         "_pts.mat",

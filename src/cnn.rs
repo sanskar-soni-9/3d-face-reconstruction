@@ -1,26 +1,24 @@
+use crate::config::INPUT_SHAPE;
+use crate::dataset::Labels;
 use core::panic;
-use layer::LayerType;
 use layer::{convolutional_layer::*, max_polling_layer::*};
+use layer::{LayerTrait, LayerType};
 use ndarray::Array3;
 
 mod layer;
-
-pub const INPUT_SIZE: (usize, usize, usize) = (3, 400, 500); // Temporary
 
 pub struct CNN {
     layers: Vec<layer::LayerType>,
     epochs: usize,
     data: Vec<Array3<f32>>,
-    labels: Array3<f32>,
 }
 
 impl CNN {
-    pub fn new(epochs: usize, data: Vec<Array3<f32>>) -> Self {
+    pub fn new(epochs: usize, inputs: Vec<Array3<f32>>) -> Self {
         CNN {
             layers: vec![],
             epochs,
-            data,
-            labels: Array3::zeros(INPUT_SIZE),
+            data: inputs,
         }
     }
 
@@ -38,7 +36,7 @@ impl CNN {
                     ConvolutionalLayer::new(filters, kernel_size, strides, layer.output_size)
                 }
             },
-            None => ConvolutionalLayer::new(filters, kernel_size, strides, INPUT_SIZE),
+            None => ConvolutionalLayer::new(filters, kernel_size, strides, INPUT_SHAPE),
         };
 
         self.add_layer(LayerType::ConvolutionalLayer(layer));
@@ -66,8 +64,29 @@ impl CNN {
         )));
     }
 
-    pub fn train(&mut self, labels: Array3<f32>) {
-        self.labels = labels;
+    pub fn train(&mut self, labels: Vec<Labels>) {
+        // TODO: implement
+        for _ in 0..self.epochs {
+            for (i, _) in labels.iter().enumerate().take(self.data.len()) {
+                self.forward_propagate(self.data[i].clone());
+            }
+        }
+    }
+
+    fn forward_propagate(&mut self, image: Array3<f32>) {
+        let mut output = image;
+        for layer in self.layers.iter_mut() {
+            match layer {
+                LayerType::ConvolutionalLayer(convolutional_layer) => {
+                    output = convolutional_layer.forward_propagate(&output);
+                }
+                LayerType::MaxPollingLayer(max_polling_layer) => {
+                    output = max_polling_layer.forward_propagate(&output);
+                }
+            };
+        }
+    }
+    fn backward_propagate(&self, error: &Labels) {
         // TODO: implement
     }
 

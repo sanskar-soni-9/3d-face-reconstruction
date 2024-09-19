@@ -9,6 +9,6 @@ pub enum LayerType {
 }
 
 pub trait LayerTrait {
-    fn forward_propogate(&mut self, input: Array3<f32>) -> Array3<f32>;
-    fn backward_propogate(&mut self, error: Array3<f32>) -> Array3<f32>;
+    fn forward_propagate(&mut self, input: &Array3<f32>) -> Array3<f32>;
+    fn backward_propagate(&mut self, error: &Array3<f32>) -> Array3<f32>;
 }

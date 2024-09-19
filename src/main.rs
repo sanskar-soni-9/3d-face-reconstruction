@@ -34,6 +34,5 @@ fn train_model() {
         println!("CSV file not found, preparing dataset...");
         prepare_data()
     });
-    // let images = face_reconstruction::get_images();
-    // face_reconstruction::train(images);
+    face_reconstruction::train(dataset);
 }
