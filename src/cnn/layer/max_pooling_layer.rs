@@ -1,4 +1,3 @@
-use super::LayerTrait;
 use ndarray::Array3;
 
 pub struct MaxPoolingLayer {
@@ -23,10 +22,8 @@ impl MaxPoolingLayer {
             output_size,
         }
     }
-}
 
-impl LayerTrait for MaxPoolingLayer {
-    fn forward_propagate(&mut self, input: &Array3<f32>) -> Array3<f32> {
+    pub fn forward_propagate(&mut self, input: &Array3<f32>) -> Array3<f32> {
         let mut output: Array3<f32> = Array3::<f32>::zeros(self.output_size);
 
         for ((f, x, y), output_val) in output.indexed_iter_mut() {
@@ -44,7 +41,7 @@ impl LayerTrait for MaxPoolingLayer {
         output
     }
 
-    fn backward_propagate(&mut self, error: &Array3<f32>) -> Array3<f32> {
+    pub fn backward_propagate(&mut self, error: &Array3<f32>) -> Array3<f32> {
         // TODO: implement
         error.clone()
     }

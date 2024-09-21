@@ -1,4 +1,3 @@
-use super::LayerTrait;
 use ndarray::{s, Array3, Array4};
 use rand::Rng;
 use rand_distr::Normal;
@@ -45,10 +44,8 @@ impl ConvolutionalLayer {
             output: Array3::zeros(output_size),
         }
     }
-}
 
-impl LayerTrait for ConvolutionalLayer {
-    fn forward_propagate(&mut self, input: &Array3<f32>) -> Array3<f32> {
+    pub fn forward_propagate(&mut self, input: &Array3<f32>) -> Array3<f32> {
         for f in 0..self.output_size.0 {
             let kernel_slice = self.kernels.slice(s![f, .., .., ..]);
             for y in 0..self.output_size.2 {
@@ -63,7 +60,7 @@ impl LayerTrait for ConvolutionalLayer {
         self.output.clone()
     }
 
-    fn backward_propagate(&mut self, error: &Array3<f32>) -> Array3<f32> {
+    pub fn backward_propagate(&mut self, error: &Array3<f32>) -> Array3<f32> {
         // TODO: implement
         error.clone()
     }
