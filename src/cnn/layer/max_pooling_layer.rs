@@ -23,7 +23,7 @@ impl MaxPoolingLayer {
         }
     }
 
-    pub fn forward_propagate(&mut self, input: &Array3<f32>) -> Array3<f32> {
+    pub fn forward_propagate(&mut self, input: &Array3<f32>, is_training: bool) -> Array3<f32> {
         let mut output: Array3<f32> = Array3::<f32>::zeros(self.output_size);
 
         for ((f, x, y), output_val) in output.indexed_iter_mut() {

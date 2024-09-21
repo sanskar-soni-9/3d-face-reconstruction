@@ -45,7 +45,7 @@ impl ConvolutionalLayer {
         }
     }
 
-    pub fn forward_propagate(&mut self, input: &Array3<f32>) -> Array3<f32> {
+    pub fn forward_propagate(&mut self, input: &Array3<f32>, is_training: bool) -> Array3<f32> {
         for f in 0..self.output_size.0 {
             let kernel_slice = self.kernels.slice(s![f, .., .., ..]);
             for y in 0..self.output_size.2 {

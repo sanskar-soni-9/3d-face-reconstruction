@@ -64,5 +64,6 @@ fn init_cnn(epochs: usize, images: Vec<Array3<f32>>) -> cnn::CNN {
     cnn.add_convolutional_layer(128, 3, 1);
     cnn.add_max_pooling_layer(2, 1);
     cnn.add_flatten_layer();
+    cnn.add_dense_layer(256, 0.01, 0.25);
     cnn
 }

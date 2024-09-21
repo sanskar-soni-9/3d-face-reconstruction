@@ -1,13 +1,15 @@
 use ndarray::{Array1, Array3};
 
-pub struct FlattenLayer {}
+pub struct FlattenLayer {
+    pub input_size: (usize, usize, usize),
+}
 
 impl FlattenLayer {
-    pub fn new() -> Self {
-        FlattenLayer {}
+    pub fn new(input_size: (usize, usize, usize)) -> Self {
+        FlattenLayer { input_size }
     }
 
-    pub fn forward_propagate(&mut self, input: &Array3<f32>) -> Array1<f32> {
+    pub fn forward_propagate(&mut self, input: &Array3<f32>, is_training: bool) -> Array1<f32> {
         input.flatten().to_owned()
     }
 
