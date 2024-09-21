@@ -18,7 +18,7 @@ pub fn train(data: Dataset) {
     let mut images = vec![];
     for (i, label) in data.labels.iter().enumerate() {
         // Temporary
-        if i == 10 {
+        if i == 1 {
             break;
         }
         images.push(get_image(&label.image_path));
@@ -56,12 +56,12 @@ pub fn get_images(image_paths: &[String]) -> Vec<Array3<f32>> {
 fn init_cnn(epochs: usize, images: Vec<Array3<f32>>) -> cnn::CNN {
     let mut cnn = cnn::CNN::new(epochs, images);
     cnn.add_convolutional_layer(16, 3, 1);
-    cnn.add_max_polling_layer(2, 1);
+    cnn.add_max_pooling_layer(2, 1);
     cnn.add_convolutional_layer(32, 3, 1);
-    cnn.add_max_polling_layer(2, 1);
+    cnn.add_max_pooling_layer(2, 1);
     cnn.add_convolutional_layer(64, 3, 1);
-    cnn.add_max_polling_layer(2, 1);
+    cnn.add_max_pooling_layer(2, 1);
     cnn.add_convolutional_layer(128, 3, 1);
-    cnn.add_max_polling_layer(2, 1);
+    cnn.add_max_pooling_layer(2, 1);
     cnn
 }

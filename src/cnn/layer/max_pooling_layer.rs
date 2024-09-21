@@ -1,14 +1,14 @@
 use super::LayerTrait;
 use ndarray::Array3;
 
-pub struct MaxPollingLayer {
+pub struct MaxPoolingLayer {
     kernel_size: usize,
     strides: usize,
     input_size: (usize, usize, usize),
     pub output_size: (usize, usize, usize),
 }
 
-impl MaxPollingLayer {
+impl MaxPoolingLayer {
     pub fn new(kernel_size: usize, input_size: (usize, usize, usize), strides: usize) -> Self {
         let output_size = (
             input_size.0,
@@ -16,7 +16,7 @@ impl MaxPollingLayer {
             (input_size.2 - kernel_size) / strides + 1,
         );
 
-        MaxPollingLayer {
+        MaxPoolingLayer {
             kernel_size,
             strides,
             input_size,
@@ -25,7 +25,7 @@ impl MaxPollingLayer {
     }
 }
 
-impl LayerTrait for MaxPollingLayer {
+impl LayerTrait for MaxPoolingLayer {
     fn forward_propagate(&mut self, input: &Array3<f32>) -> Array3<f32> {
         let mut output: Array3<f32> = Array3::<f32>::zeros(self.output_size);
 

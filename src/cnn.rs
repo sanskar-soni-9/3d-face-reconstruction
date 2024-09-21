@@ -1,7 +1,7 @@
 use crate::config::INPUT_SHAPE;
 use crate::dataset::Labels;
 use core::panic;
-use layer::{convolutional_layer::*, max_polling_layer::*};
+use layer::{convolutional_layer::*, max_pooling_layer::*};
 use layer::{LayerTrait, LayerType};
 use ndarray::Array3;
 
@@ -32,7 +32,7 @@ impl CNN {
                 LayerType::ConvolutionalLayer(_) => {
                     panic!("Can't add another convolutional layer after one.")
                 }
-                LayerType::MaxPollingLayer(layer) => {
+                LayerType::MaxPoolingLayer(layer) => {
                     ConvolutionalLayer::new(filters, kernel_size, strides, layer.output_size)
                 }
             },
@@ -42,22 +42,22 @@ impl CNN {
         self.add_layer(LayerType::ConvolutionalLayer(layer));
     }
 
-    pub fn add_max_polling_layer(&mut self, kernel_size: usize, strides: usize) {
+    pub fn add_max_pooling_layer(&mut self, kernel_size: usize, strides: usize) {
         if strides == 0 {
             panic!("Stride should be greater than 0.");
         }
 
         let layer = match self.layers.last() {
-            None => panic!("Need Convolutional Layer Before Max Polling Layer."),
+            None => panic!("Need Convolutional Layer Before Max Pooling Layer."),
             Some(layer) => match layer {
-                LayerType::MaxPollingLayer(_) => {
-                    panic!("Need Convolutional Layer Before Max Polling Layer.")
+                LayerType::MaxPoolingLayer(_) => {
+                    panic!("Need Convolutional Layer Before Max Pooling Layer.")
                 }
                 LayerType::ConvolutionalLayer(layer) => layer,
             },
         };
 
-        self.add_layer(LayerType::MaxPollingLayer(MaxPollingLayer::new(
+        self.add_layer(LayerType::MaxPoolingLayer(MaxPoolingLayer::new(
             kernel_size,
             layer.output_size,
             strides,
@@ -80,8 +80,8 @@ impl CNN {
                 LayerType::ConvolutionalLayer(convolutional_layer) => {
                     output = convolutional_layer.forward_propagate(&output);
                 }
-                LayerType::MaxPollingLayer(max_polling_layer) => {
-                    output = max_polling_layer.forward_propagate(&output);
+                LayerType::MaxPoolingLayer(max_pooling_layer) => {
+                    output = max_pooling_layer.forward_propagate(&output);
                 }
             };
         }

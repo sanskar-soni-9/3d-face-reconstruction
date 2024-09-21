@@ -1,11 +1,11 @@
 use ndarray::Array3;
 
 pub mod convolutional_layer;
-pub mod max_polling_layer;
+pub mod max_pooling_layer;
 
 pub enum LayerType {
     ConvolutionalLayer(convolutional_layer::ConvolutionalLayer),
-    MaxPollingLayer(max_polling_layer::MaxPollingLayer),
+    MaxPoolingLayer(max_pooling_layer::MaxPoolingLayer),
 }
 
 pub trait LayerTrait {
