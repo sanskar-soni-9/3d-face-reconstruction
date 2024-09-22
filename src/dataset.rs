@@ -1,19 +1,19 @@
 use crate::config::DATA_DIR;
 use crate::utils::*;
-use core::{f64, panic};
+use core::panic;
 use serde::{ser::SerializeStruct, Serialize};
 use std::fs;
 
 pub struct Labels {
     pub image_path: String,
     pub color_para: [f32; 7],
-    pub exp_para: [f64; 29],
-    pub illum_para: [f64; 10],
-    pub pose_para: [f64; 7],
-    pub shape_para: [f64; 199],
-    pub tex_para: [f64; 199],
+    pub exp_para: [f32; 29],
+    pub illum_para: [f32; 10],
+    pub pose_para: [f32; 7],
+    pub shape_para: [f32; 199],
+    pub tex_para: [f32; 199],
     pub roi: [i16; 4],
-    pub pt2d: [f64; 136],
+    pub pt2d: [f32; 136],
     pub pts_2d: [f32; 136],
     pub pts_3d: [f32; 136],
 }
@@ -79,13 +79,13 @@ impl Dataset {
                 match field.as_str() {
                     "image_path" => image_path = data.to_string(),
                     "color_para" => color_para = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
-                    "exp_para" => exp_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
-                    "illum_para" => illum_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
-                    "pose_para" => pose_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
-                    "shape_para" => shape_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
-                    "tex_para" => tex_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
+                    "exp_para" => exp_para = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
+                    "illum_para" => illum_para = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
+                    "pose_para" => pose_para = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
+                    "shape_para" => shape_para = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
+                    "tex_para" => tex_para = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
                     "roi" => roi = vec_to_i16_array(&str_to_vec_i16(data).unwrap()),
-                    "pt2d" => pt2d = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
+                    "pt2d" => pt2d = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
                     "pts_2d" => pts_2d = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
                     "pts_3d" => pts_3d = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
                     _ => continue,
@@ -204,7 +204,7 @@ impl Dataset {
                     "exp_para" => {
                         exp_para = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f64_array(real)
+                                vec_to_f32_array_from_f64(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -212,7 +212,7 @@ impl Dataset {
                     "illum_para" => {
                         illum_para = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f64_array(real)
+                                vec_to_f32_array_from_f64(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -220,10 +220,10 @@ impl Dataset {
                     "pose_para" => {
                         pose_para = match array.data() {
                             matfile::NumericData::Single { real, imag: _ } => {
-                                vec_into_f64_array(real)
+                                vec_to_f32_array(real)
                             }
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f64_array(real)
+                                vec_to_f32_array_from_f64(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -231,7 +231,7 @@ impl Dataset {
                     "shape_para" => {
                         shape_para = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f64_array(real)
+                                vec_to_f32_array_from_f64(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -239,7 +239,7 @@ impl Dataset {
                     "tex_para" => {
                         tex_para = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f64_array(real)
+                                vec_to_f32_array_from_f64(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -253,7 +253,7 @@ impl Dataset {
                     "pt2d" => {
                         pt2d = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f64_array(real)
+                                vec_to_f32_array_from_f64(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
