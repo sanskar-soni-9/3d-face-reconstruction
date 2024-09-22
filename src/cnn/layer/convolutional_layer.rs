@@ -1,6 +1,7 @@
 use ndarray::{s, Array3, Array4};
 use rand::Rng;
 use rand_distr::Normal;
+use rayon::prelude::*;
 
 pub struct ConvolutionalLayer {
     filters: usize,
@@ -46,17 +47,17 @@ impl ConvolutionalLayer {
     }
 
     pub fn forward_propagate(&mut self, input: &Array3<f32>, is_training: bool) -> Array3<f32> {
-        for f in 0..self.output_size.0 {
-            let kernel_slice = self.kernels.slice(s![f, .., .., ..]);
-            for y in 0..self.output_size.2 {
-                for x in 0..self.output_size.1 {
-                    let input_slice =
-                        input.slice(s![.., x..x + self.kernel_size, y..y + self.kernel_size]);
-                    self.output[[f, x, y]] = (&input_slice * &kernel_slice).sum().max(0.0);
-                }
-            }
-        }
+        let mut var: Vec<((usize, usize, usize), &mut f32)> =
+            self.output.indexed_iter_mut().collect();
+        var.par_iter_mut()
+            .enumerate()
+            .for_each(|(_, ((f, x, y), output_val))| {
+                let kernel_slice = self.kernels.slice(s![*f, .., .., ..]);
+                let input_slice =
+                    input.slice(s![.., *x..*x + self.kernel_size, *y..*y + self.kernel_size]);
 
+                **output_val = (&input_slice * &kernel_slice).sum().max(0.0);
+            });
         self.output.clone()
     }
 
