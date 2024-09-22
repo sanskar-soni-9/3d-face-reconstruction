@@ -1,6 +1,7 @@
 use ndarray::{Array1, Array2, Array3};
 use rand::Rng;
 use rand_distr::Normal;
+use rayon::prelude::*;
 
 pub struct DenseLayer {
     weights: Array2<f32>,
@@ -11,11 +12,18 @@ pub struct DenseLayer {
 
 impl DenseLayer {
     pub fn new(input_size: usize, output_size: usize, dropout_rate: f32, bias: f32) -> Self {
-        let mut rng = rand::thread_rng();
         let std_dev = (2.0 / input_size as f32).sqrt();
         let normal_distr = Normal::new(0.0, std_dev).unwrap();
-        let weights: Array2<f32> =
-            Array2::from_shape_fn((output_size, input_size), |_| rng.sample(normal_distr));
+
+        let mut weights: Array2<f32> = Array2::zeros((output_size, input_size));
+        let Some(weights_slice) = weights.as_slice_mut() else { panic!("Unexpected error occurred!")};
+        weights_slice
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(_, val)| {
+                let mut rng = rand::thread_rng();
+                *val = rng.sample(normal_distr);
+            });
         let biases: Array1<f32> = Array1::from_elem(output_size, bias);
 
         DenseLayer {
