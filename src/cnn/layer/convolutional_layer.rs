@@ -47,11 +47,11 @@ impl ConvolutionalLayer {
     }
 
     pub fn forward_propagate(&mut self, input: &Array3<f32>, is_training: bool) -> Array3<f32> {
-        let mut var: Vec<((usize, usize, usize), &mut f32)> =
+        let mut indexed_output_iter: Vec<((usize, usize, usize), &mut f32)> =
             self.output.indexed_iter_mut().collect();
-        var.par_iter_mut()
-            .enumerate()
-            .for_each(|(_, ((f, x, y), output_val))| {
+        indexed_output_iter
+            .par_iter_mut()
+            .for_each(|((f, x, y), output_val)| {
                 let kernel_slice = self.kernels.slice(s![*f, .., .., ..]);
                 let input_slice =
                     input.slice(s![.., *x..*x + self.kernel_size, *y..*y + self.kernel_size]);

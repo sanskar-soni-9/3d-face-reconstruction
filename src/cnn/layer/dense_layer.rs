@@ -17,13 +17,10 @@ impl DenseLayer {
 
         let mut weights: Array2<f32> = Array2::zeros((output_size, input_size));
         let Some(weights_slice) = weights.as_slice_mut() else { panic!("Unexpected error occurred!")};
-        weights_slice
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(_, val)| {
-                let mut rng = rand::thread_rng();
-                *val = rng.sample(normal_distr);
-            });
+        weights_slice.par_iter_mut().for_each(|val| {
+            let mut rng = rand::thread_rng();
+            *val = rng.sample(normal_distr);
+        });
         let biases: Array1<f32> = Array1::from_elem(output_size, bias);
 
         DenseLayer {
