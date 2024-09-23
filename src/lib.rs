@@ -1,4 +1,4 @@
-use config::INPUT_SHAPE;
+use config::{CNN_OUTPUT_SIZE, INPUT_SHAPE};
 use dataset::Dataset;
 use image::{imageops::FilterType, GenericImageView};
 use ndarray::Array3;
@@ -64,6 +64,8 @@ fn init_cnn(epochs: usize, images: Vec<Array3<f32>>) -> cnn::CNN {
     cnn.add_convolutional_layer(128, 3, 1);
     cnn.add_max_pooling_layer(2, 1);
     cnn.add_flatten_layer();
+    cnn.add_dense_layer(128, 0.01, 0.25);
     cnn.add_dense_layer(256, 0.01, 0.25);
+    cnn.add_dense_layer(CNN_OUTPUT_SIZE, 0.0, 0.0);
     cnn
 }

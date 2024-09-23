@@ -1,6 +1,5 @@
-use crate::config::INPUT_SHAPE;
+use crate::config::{INPUT_SHAPE, TRAINIG_LABELS};
 use crate::dataset::Labels;
-use core::panic;
 use dense_layer::DenseLayer;
 use layer::{convolutional_layer::*, flatten_layer::*, max_pooling_layer::*, *};
 use ndarray::{Array1, Array3};
@@ -97,8 +96,10 @@ impl CNN {
     pub fn train(&mut self, labels: Vec<Labels>) {
         // TODO: implement
         for _ in 0..self.epochs {
-            for (i, _) in labels.iter().enumerate().take(self.data.len()) {
+            for (i, labels) in labels.iter().enumerate().take(self.data.len()) {
+                let training_labels = self.prepare_training_labels(labels);
                 self.forward_propagate(self.data[i].clone());
+                self.backward_propagate(training_labels);
             }
         }
     }
@@ -124,8 +125,41 @@ impl CNN {
         }
     }
 
-    fn backward_propagate(&self, error: &Labels) {
+    fn backward_propagate(&mut self, mut error: Vec<f32>) {
         // TODO: implement
+        for layer in self.layers.iter_mut().rev() {
+            match layer {
+                LayerType::Convolutional(convolutional_layer) => {
+                    error = convolutional_layer.backward_propagate(&error);
+                }
+                LayerType::MaxPooling(max_pooling_layer) => {
+                    error = max_pooling_layer.backward_propagate(&error);
+                }
+                LayerType::Flatten(_) => continue,
+                LayerType::Dense(dense_layer) => {
+                    error = dense_layer.backward_propagate(&error);
+                }
+            }
+        }
+    }
+
+    fn prepare_training_labels(&self, labels: &Labels) -> Vec<f32> {
+        let mut training_labels: Vec<f32> = vec![];
+        for train_label in TRAINIG_LABELS {
+            match train_label {
+                "pts_2d" => training_labels.append(&mut labels.pts_2d.to_vec()),
+                "pts_3d" => training_labels.append(&mut labels.pts_3d.to_vec()),
+                "pose_para" => training_labels.append(&mut labels.pose_para.to_vec()),
+                "shape_para" => training_labels.append(&mut labels.shape_para.to_vec()),
+                "illum_para" => training_labels.append(&mut labels.illum_para.to_vec()),
+                "color_para" => training_labels.append(&mut labels.color_para.to_vec()),
+                "exp_para" => training_labels.append(&mut labels.exp_para.to_vec()),
+                "tex_para" => training_labels.append(&mut labels.tex_para.to_vec()),
+                "pt2d" => training_labels.append(&mut labels.pts_2d.to_vec()),
+                _ => panic!("Unknown Label"),
+            }
+        }
+        training_labels
     }
 
     fn add_layer(&mut self, layer: LayerType) {

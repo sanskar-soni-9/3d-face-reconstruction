@@ -1,4 +1,4 @@
-use ndarray::{Array1, Array2, Array3};
+use ndarray::{Array1, Array2};
 use rand::Rng;
 use rand_distr::Normal;
 use rayon::prelude::*;
@@ -49,8 +49,8 @@ impl DenseLayer {
         logits
     }
 
-    pub fn backward_propagate(&mut self, error: &Array3<f32>) -> Array3<f32> {
+    pub fn backward_propagate(&mut self, error: &Vec<f32>) -> Vec<f32> {
         // TODO: implement
-        error.clone()
+        error.to_owned()
     }
 }

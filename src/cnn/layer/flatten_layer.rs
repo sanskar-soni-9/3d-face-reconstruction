@@ -13,8 +13,7 @@ impl FlattenLayer {
         input.flatten().to_owned()
     }
 
-    pub fn backward_propagate(&mut self, error: &Array3<f32>) -> Array3<f32> {
-        // TODO: implement
-        error.clone()
+    pub fn backward_propagate(&mut self, error: &Vec<f32>) -> Vec<f32> {
+        error.to_owned()
     }
 }
