@@ -13,7 +13,10 @@ impl FlattenLayer {
         input.flatten().to_owned()
     }
 
-    pub fn backward_propagate(&mut self, error: &Vec<f32>) -> Vec<f32> {
-        error.to_owned()
+    pub fn backward_propagate(&mut self, error: &Array1<f32>) -> Array3<f32> {
+        error
+            .to_owned()
+            .into_shape_with_order(self.input_size)
+            .unwrap()
     }
 }

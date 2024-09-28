@@ -49,7 +49,7 @@ impl DenseLayer {
         logits
     }
 
-    pub fn backward_propagate(&mut self, error: &Vec<f32>) -> Vec<f32> {
+    pub fn backward_propagate(&mut self, error: &Array1<f32>) -> Array1<f32> {
         // TODO: implement
         error.to_owned()
     }

@@ -95,47 +95,53 @@ impl CNN {
 
     pub fn train(&mut self, labels: Vec<Labels>) {
         // TODO: implement
-        for _ in 0..self.epochs {
+        for i in 0..self.epochs {
             for (i, labels) in labels.iter().enumerate().take(self.data.len()) {
                 let training_labels = self.prepare_training_labels(labels);
-                self.forward_propagate(self.data[i].clone());
-                self.backward_propagate(training_labels);
+                let prediction = self.forward_propagate(self.data[i].clone(), true);
+                let error = &prediction - &training_labels;
+                self.backward_propagate(error);
             }
         }
     }
 
-    fn forward_propagate(&mut self, image: Array3<f32>) {
-        let mut output = image;
-        let mut flatten_output = Array1::zeros(0);
+    fn forward_propagate(&mut self, mut input: Array3<f32>, is_training: bool) -> Array1<f32> {
+        let mut flatten_input = Array1::zeros(0);
         for layer in self.layers.iter_mut() {
             match layer {
                 LayerType::Convolutional(convolutional_layer) => {
-                    output = convolutional_layer.forward_propagate(&output, true);
+                    input = convolutional_layer.forward_propagate(&input, is_training);
                 }
                 LayerType::MaxPooling(max_pooling_layer) => {
-                    output = max_pooling_layer.forward_propagate(&output, true);
+                    input = max_pooling_layer.forward_propagate(&input, is_training);
                 }
                 LayerType::Flatten(flatten_layer) => {
-                    flatten_output = flatten_layer.forward_propagate(&output, true);
+                    flatten_input = flatten_layer.forward_propagate(&input, is_training);
                 }
                 LayerType::Dense(dense_layer) => {
-                    flatten_output = dense_layer.forward_propagate(&flatten_output, true);
+                    flatten_input = dense_layer.forward_propagate(&flatten_input, is_training);
                 }
             };
         }
+        flatten_input
     }
 
-    fn backward_propagate(&mut self, mut error: Vec<f32>) {
-        // TODO: implement
+    fn backward_propagate(&mut self, mut error: Array1<f32>) {
+        let mut shaped_error = error
+            .to_owned()
+            .into_shape_with_order((1, 1, error.len()))
+            .expect("Unexpected ERROR occured while converting error to shaped error.");
         for layer in self.layers.iter_mut().rev() {
             match layer {
                 LayerType::Convolutional(convolutional_layer) => {
-                    error = convolutional_layer.backward_propagate(&error);
+                    shaped_error = convolutional_layer.backward_propagate(&shaped_error);
                 }
                 LayerType::MaxPooling(max_pooling_layer) => {
-                    error = max_pooling_layer.backward_propagate(&error);
+                    shaped_error = max_pooling_layer.backward_propagate(&shaped_error);
                 }
-                LayerType::Flatten(_) => continue,
+                LayerType::Flatten(flatten_layer) => {
+                    shaped_error = flatten_layer.backward_propagate(&error);
+                }
                 LayerType::Dense(dense_layer) => {
                     error = dense_layer.backward_propagate(&error);
                 }
@@ -143,7 +149,7 @@ impl CNN {
         }
     }
 
-    fn prepare_training_labels(&self, labels: &Labels) -> Vec<f32> {
+    fn prepare_training_labels(&self, labels: &Labels) -> Array1<f32> {
         let mut training_labels: Vec<f32> = vec![];
         for train_label in TRAINIG_LABELS {
             match train_label {
@@ -159,7 +165,7 @@ impl CNN {
                 _ => panic!("Unknown Label"),
             }
         }
-        training_labels
+        Array1::from_vec(training_labels)
     }
 
     fn add_layer(&mut self, layer: LayerType) {
