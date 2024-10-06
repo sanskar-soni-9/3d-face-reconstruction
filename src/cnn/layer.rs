@@ -3,6 +3,7 @@ pub mod dense_layer;
 pub mod flatten_layer;
 pub mod max_pooling_layer;
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub enum LayerType {
     Convolutional(convolutional_layer::ConvolutionalLayer),
     MaxPooling(max_pooling_layer::MaxPoolingLayer),
@@ -10,9 +11,16 @@ pub enum LayerType {
     Dense(dense_layer::DenseLayer),
 }
 
-// TODO: make it generic
-// use ndarray::Array3;
-// pub trait LayerTrait {
-//     fn forward_propagate(&mut self, input: &Array3<f32>, is_training: bool) -> Array3<f32>;
-//     fn backward_propagate(&mut self, error: &Array3<f32>) -> Array3<f32>;
-// }
+pub fn relu(x: f64) -> f64 {
+    if x > 0.0 {
+        return x;
+    }
+    0.0
+}
+
+pub fn relu_prime(x: f64) -> f64 {
+    if x > 0.0 {
+        return 1.0;
+    }
+    0.0
+}

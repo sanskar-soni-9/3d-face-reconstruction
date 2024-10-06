@@ -1,21 +1,22 @@
-use crate::config::DATA_DIR;
+use crate::config::{DATASET_INPUT_SIZE, DATA_DIR, INPUT_SHAPE};
 use crate::utils::*;
 use core::panic;
+use rayon::prelude::*;
 use serde::{ser::SerializeStruct, Serialize};
 use std::fs;
 
 pub struct Labels {
     pub image_path: String,
-    pub color_para: [f32; 7],
-    pub exp_para: [f32; 29],
-    pub illum_para: [f32; 10],
-    pub pose_para: [f32; 7],
-    pub shape_para: [f32; 199],
-    pub tex_para: [f32; 199],
-    pub roi: [i16; 4],
-    pub pt2d: [f32; 136],
-    pub pts_2d: [f32; 136],
-    pub pts_3d: [f32; 136],
+    pub color_para: [f64; 7],
+    pub exp_para: [f64; 29],
+    pub illum_para: [f64; 10],
+    pub pose_para: [f64; 7],
+    pub shape_para: [f64; 199],
+    pub tex_para: [f64; 199],
+    pub roi: [f64; 4],
+    pub pt2d: [f64; 136],
+    pub pts_2d: [f64; 136],
+    pub pts_3d: [f64; 136],
 }
 
 impl Serialize for Labels {
@@ -59,7 +60,7 @@ impl Dataset {
         ]
     }
     pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
-        let mut data_file = csv::Reader::from_path([DATA_DIR, "afw.csv"].concat())?;
+        let mut data_file = csv::Reader::from_path([DATA_DIR, "/afw.csv"].concat())?;
         let mut labels: Vec<Labels> = vec![];
         let mut image_path = String::new();
         let mut color_para = [0.0; 7];
@@ -68,7 +69,7 @@ impl Dataset {
         let mut pose_para = [0.0; 7];
         let mut shape_para = [0.0; 199];
         let mut tex_para = [0.0; 199];
-        let mut roi = [0; 4];
+        let mut roi = [0.0; 4];
         let mut pt2d = [0.0; 136];
         let mut pts_2d = [0.0; 136];
         let mut pts_3d = [0.0; 136];
@@ -78,16 +79,16 @@ impl Dataset {
             for (field, data) in Self::get_headers().iter().zip(record.iter()) {
                 match field.as_str() {
                     "image_path" => image_path = data.to_string(),
-                    "color_para" => color_para = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
-                    "exp_para" => exp_para = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
-                    "illum_para" => illum_para = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
-                    "pose_para" => pose_para = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
-                    "shape_para" => shape_para = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
-                    "tex_para" => tex_para = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
-                    "roi" => roi = vec_to_i16_array(&str_to_vec_i16(data).unwrap()),
-                    "pt2d" => pt2d = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
-                    "pts_2d" => pts_2d = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
-                    "pts_3d" => pts_3d = vec_to_f32_array(&str_to_vec_f32(data).unwrap()),
+                    "color_para" => color_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
+                    "exp_para" => exp_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
+                    "illum_para" => illum_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
+                    "pose_para" => pose_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
+                    "shape_para" => shape_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
+                    "tex_para" => tex_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
+                    "roi" => roi = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
+                    "pt2d" => pt2d = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
+                    "pts_2d" => pts_2d = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
+                    "pts_3d" => pts_3d = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
                     _ => continue,
                 }
             }
@@ -112,7 +113,7 @@ impl Dataset {
     pub fn prepare() -> Self {
         let data = Self::get_afw_mat_data();
         let mut output_file = csv::WriterBuilder::new()
-            .from_path([DATA_DIR, "afw.csv"].concat())
+            .from_path([DATA_DIR, "/afw.csv"].concat())
             .expect("Error creating/writing afw.csv file");
 
         for record in &data.labels {
@@ -126,7 +127,7 @@ impl Dataset {
     }
 
     fn get_afw_mat_data() -> Self {
-        let img_dir_path = [DATA_DIR, "AFW/"].concat();
+        let img_dir_path = [DATA_DIR, "/AFW/"].concat();
         let img_dir = fs::read_dir(&img_dir_path).unwrap_or_else(|e| {
             panic!(
                 "Error reading image directory: {}\nError: {}",
@@ -149,14 +150,14 @@ impl Dataset {
                 &[
                     &[
                         DATA_DIR,
-                        "AFW/",
+                        "/AFW/",
                         file_name.split_terminator('.').next().unwrap(),
                         ".mat",
                     ]
                     .concat(),
                     &[
                         DATA_DIR,
-                        "landmarks/AFW/",
+                        "/landmarks/AFW/",
                         file_name.split_terminator('.').next().unwrap(),
                         "_pts.mat",
                     ]
@@ -178,7 +179,7 @@ impl Dataset {
         let mut pose_para = [0.0; 7];
         let mut shape_para = [0.0; 199];
         let mut tex_para = [0.0; 199];
-        let mut roi = [0; 4];
+        let mut roi = [0.0; 4];
         let mut pt2d = [0.0; 136];
         let mut pts_2d = [0.0; 136];
         let mut pts_3d = [0.0; 136];
@@ -196,7 +197,7 @@ impl Dataset {
                     "color_para" => {
                         color_para = match array.data() {
                             matfile::NumericData::Single { real, imag: _ } => {
-                                vec_to_f32_array(real)
+                                vec_to_f64_array_from_f32(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -204,7 +205,7 @@ impl Dataset {
                     "exp_para" => {
                         exp_para = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f32_array_from_f64(real)
+                                vec_to_f64_array(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -212,7 +213,7 @@ impl Dataset {
                     "illum_para" => {
                         illum_para = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f32_array_from_f64(real)
+                                vec_to_f64_array(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -220,10 +221,10 @@ impl Dataset {
                     "pose_para" => {
                         pose_para = match array.data() {
                             matfile::NumericData::Single { real, imag: _ } => {
-                                vec_to_f32_array(real)
+                                vec_to_f64_array_from_f32(real)
                             }
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f32_array_from_f64(real)
+                                vec_to_f64_array(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -231,7 +232,7 @@ impl Dataset {
                     "shape_para" => {
                         shape_para = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f32_array_from_f64(real)
+                                vec_to_f64_array(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -239,21 +240,23 @@ impl Dataset {
                     "tex_para" => {
                         tex_para = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f32_array_from_f64(real)
+                                vec_to_f64_array(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
                     }
                     "roi" => {
                         roi = match array.data() {
-                            matfile::NumericData::Int16 { real, imag: _ } => vec_to_i16_array(real),
+                            matfile::NumericData::Int16 { real, imag: _ } => {
+                                Self::scale_labels(vec_to_f64_array_from_i16(real))
+                            }
                             _ => panic!("Unexpected Data"),
                         };
                     }
                     "pt2d" => {
                         pt2d = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f32_array_from_f64(real)
+                                Self::scale_labels(vec_to_f64_array(real))
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -261,7 +264,7 @@ impl Dataset {
                     "pts_2d" => {
                         pts_2d = match array.data() {
                             matfile::NumericData::Single { real, imag: _ } => {
-                                vec_to_f32_array(real)
+                                Self::scale_labels(vec_to_f64_array_from_f32(real))
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -269,7 +272,7 @@ impl Dataset {
                     "pts_3d" => {
                         pts_3d = match array.data() {
                             matfile::NumericData::Single { real, imag: _ } => {
-                                vec_to_f32_array(real)
+                                Self::scale_labels(vec_to_f64_array_from_f32(real))
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -292,5 +295,13 @@ impl Dataset {
             pts_2d,
             pts_3d,
         }
+    }
+
+    fn scale_labels<const N: usize>(mut labels: [f64; N]) -> [f64; N] {
+        let scale_factor = INPUT_SHAPE.1 as f64 / DATASET_INPUT_SIZE as f64;
+        labels
+            .par_iter_mut()
+            .for_each(|label| *label *= scale_factor);
+        labels
     }
 }

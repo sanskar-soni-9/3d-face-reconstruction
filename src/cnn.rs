@@ -1,24 +1,38 @@
-use crate::config::{INPUT_SHAPE, TRAINIG_LABELS};
+use crate::config::{EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, TRAINIG_LABELS};
 use crate::dataset::Labels;
 use dense_layer::DenseLayer;
 use layer::{convolutional_layer::*, flatten_layer::*, max_pooling_layer::*, *};
 use ndarray::{Array1, Array3};
+use serde::{Deserialize, Serialize};
+use std::io::{Read, Write};
 
 mod layer;
 
+#[derive(Serialize, Deserialize)]
 pub struct CNN {
-    layers: Vec<layer::LayerType>,
+    layers: Vec<LayerType>,
     epochs: usize,
-    data: Vec<Array3<f32>>,
+    cur_epoch: usize,
+    #[serde(skip)]
+    data: Vec<Array3<f64>>,
+    last_train_data: usize,
+    lr: f64,
 }
 
 impl CNN {
-    pub fn new(epochs: usize, inputs: Vec<Array3<f32>>) -> Self {
+    pub fn new(epochs: usize, inputs: Vec<Array3<f64>>, lr: f64) -> Self {
         CNN {
             layers: vec![],
             epochs,
+            cur_epoch: 0,
             data: inputs,
+            last_train_data: 0,
+            lr,
         }
+    }
+
+    pub fn infer(&mut self, img_num: usize) -> Array1<f64> {
+        self.forward_propagate(self.data[img_num].clone(), false)
     }
 
     pub fn add_convolutional_layer(&mut self, filters: usize, kernel_size: usize, strides: usize) {
@@ -73,7 +87,7 @@ impl CNN {
         self.add_layer(LayerType::Flatten(FlattenLayer::new(input_size)));
     }
 
-    pub fn add_dense_layer(&mut self, neurons: usize, bias: f32, dropout_rate: f32) {
+    pub fn add_dense_layer(&mut self, neurons: usize, bias: f64, dropout_rate: f64) {
         let input_size = match self.layers.last() {
             Some(layer) => match layer {
                 LayerType::Dense(layer) => layer.output_size,
@@ -82,7 +96,7 @@ impl CNN {
                 }
                 _ => panic!("Add dense layer after a flatten or dense layer."),
             },
-            None => panic!("Add dense layer after a flatten or dense layer."),
+            None => self.data[0].len(),
         };
 
         self.add_layer(LayerType::Dense(DenseLayer::new(
@@ -94,18 +108,39 @@ impl CNN {
     }
 
     pub fn train(&mut self, labels: Vec<Labels>) {
-        // TODO: implement
-        for i in 0..self.epochs {
+        for e in self.cur_epoch..self.epochs {
+            self.cur_epoch = e;
             for (i, labels) in labels.iter().enumerate().take(self.data.len()) {
                 let training_labels = self.prepare_training_labels(labels);
+                let start_time = std::time::SystemTime::now();
+
                 let prediction = self.forward_propagate(self.data[i].clone(), true);
+                let forward_time = std::time::SystemTime::now();
+                println!(
+                    "\nFORWARD TOOK: {:?}\n",
+                    forward_time.duration_since(start_time)
+                );
+
                 let error = &prediction - &training_labels;
+                println!(
+                    "PREDICTION: {:?}\n\nEXPECTED: {:?}\n\nERROR: {:?}\n\n",
+                    prediction, training_labels, error
+                );
+
                 self.backward_propagate(error);
+                let backward_time = std::time::SystemTime::now();
+                println!(
+                    "\nBACKWARD TOOK: {:?}\n\nIMAGE TOOK: {:?}\n\n",
+                    backward_time.duration_since(forward_time),
+                    backward_time.duration_since(start_time)
+                );
             }
+            println!("Epoch {} complete saving model.\n", e);
+            self.save(EPOCH_MODEL);
         }
     }
 
-    fn forward_propagate(&mut self, mut input: Array3<f32>, is_training: bool) -> Array1<f32> {
+    fn forward_propagate(&mut self, mut input: Array3<f64>, is_training: bool) -> Array1<f64> {
         let mut flatten_input = Array1::zeros(0);
         for layer in self.layers.iter_mut() {
             match layer {
@@ -126,7 +161,7 @@ impl CNN {
         flatten_input
     }
 
-    fn backward_propagate(&mut self, mut error: Array1<f32>) {
+    fn backward_propagate(&mut self, mut error: Array1<f64>) {
         let mut shaped_error = error
             .to_owned()
             .into_shape_with_order((1, 1, error.len()))
@@ -134,23 +169,23 @@ impl CNN {
         for layer in self.layers.iter_mut().rev() {
             match layer {
                 LayerType::Convolutional(convolutional_layer) => {
-                    shaped_error = convolutional_layer.backward_propagate(&shaped_error);
+                    shaped_error = convolutional_layer.backward_propagate(shaped_error, self.lr);
                 }
                 LayerType::MaxPooling(max_pooling_layer) => {
-                    shaped_error = max_pooling_layer.backward_propagate(&shaped_error);
+                    shaped_error = max_pooling_layer.backward_propagate(shaped_error);
                 }
                 LayerType::Flatten(flatten_layer) => {
                     shaped_error = flatten_layer.backward_propagate(&error);
                 }
                 LayerType::Dense(dense_layer) => {
-                    error = dense_layer.backward_propagate(&error);
+                    error = dense_layer.backward_propagate(error, self.lr);
                 }
             }
         }
     }
 
-    fn prepare_training_labels(&self, labels: &Labels) -> Array1<f32> {
-        let mut training_labels: Vec<f32> = vec![];
+    fn prepare_training_labels(&self, labels: &Labels) -> Array1<f64> {
+        let mut training_labels: Vec<f64> = vec![];
         for train_label in TRAINIG_LABELS {
             match train_label {
                 "pts_2d" => training_labels.append(&mut labels.pts_2d.to_vec()),
@@ -170,5 +205,31 @@ impl CNN {
 
     fn add_layer(&mut self, layer: LayerType) {
         self.layers.push(layer);
+    }
+
+    fn save(&self, file_name: &str) {
+        let mut model_file = std::fs::File::create(format!("{}/{}.txt", MODELS_DIR, file_name,))
+            .unwrap_or_else(|e| panic!("Error creating model file: {}\nError: {}", file_name, e));
+        let json = serde_json::to_string(&self)
+            .unwrap_or_else(|e| panic!("Error serializing model: {}\nError: {}", file_name, e));
+        model_file
+            .write_all(json.as_bytes())
+            .unwrap_or_else(|e| panic!("Error writing to model file: {}\nError: {}", file_name, e));
+    }
+
+    pub fn load(model_path: &str) -> CNN {
+        let mut file = std::fs::File::open(model_path)
+            .unwrap_or_else(|e| panic!("Error opening model file: {}\nError: {}", model_path, e));
+        let mut model = String::new();
+        file.read_to_string(&mut model)
+            .unwrap_or_else(|e| panic!("Error opening model file: {}\nError: {}", model_path, e));
+        serde_json::from_str(&model)
+            .unwrap_or_else(|e| panic!("Error deserializing model: {}\nError: {}", model_path, e))
+    }
+
+    pub fn load_with_data(model_path: &str, data: Vec<Array3<f64>>) -> CNN {
+        let mut cnn = Self::load(model_path);
+        cnn.data = data;
+        cnn
     }
 }
