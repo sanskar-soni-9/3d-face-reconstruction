@@ -1,8 +1,9 @@
-use crate::cnn::{relu, relu_prime};
 use ndarray::{s, Array1, Array2};
 use rand::Rng;
 use rand_distr::Normal;
 use rayon::prelude::*;
+
+use super::{relu, relu_prime};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct DenseLayer {

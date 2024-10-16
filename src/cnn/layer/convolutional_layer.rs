@@ -1,4 +1,4 @@
-use crate::cnn::{relu, relu_prime};
+use super::{relu, relu_prime};
 use ndarray::{s, Array3, Array4, Axis};
 use rand::Rng;
 use rand_distr::Normal;

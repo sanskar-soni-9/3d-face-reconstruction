@@ -1,7 +1,9 @@
 use crate::config::{EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, TRAINIG_LABELS};
 use crate::dataset::Labels;
-use dense_layer::DenseLayer;
-use layer::{convolutional_layer::*, flatten_layer::*, max_pooling_layer::*, *};
+use layer::{
+    convolutional_layer::*, dense_layer::*, flatten_layer::*, global_avg_pooling_layer::*,
+    max_pooling_layer::*, LayerType,
+};
 use ndarray::{Array1, Array3};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
@@ -54,6 +56,23 @@ impl CNN {
 
         self.add_layer(LayerType::Convolutional(layer));
     }
+    pub fn add_global_avg_pooling_layer(&mut self) {
+        let input_size = match self.layers.last() {
+            Some(layer) => match layer {
+                LayerType::Convolutional(layer) => layer.output_size,
+                LayerType::MaxPooling(layer) => layer.output_size,
+                _ => panic!(
+                    "Add global average pooling layer after a convolutional or pooling layer."
+                ),
+            },
+            None => {
+                panic!("Add global average pooling layer after a convolutional or pooling layer.")
+            }
+        };
+        self.add_layer(LayerType::GlobalAvgPooling(GlobalAvgPoolingLayer::new(
+            input_size,
+        )));
+    }
 
     pub fn add_max_pooling_layer(&mut self, kernel_size: usize, strides: usize) {
         if strides == 0 {
@@ -94,6 +113,7 @@ impl CNN {
                 LayerType::Flatten(layer) => {
                     layer.input_size.0 * layer.input_size.1 * layer.input_size.2
                 }
+                LayerType::GlobalAvgPooling(layer) => layer.get_output_size(),
                 _ => panic!("Add dense layer after a flatten or dense layer."),
             },
             None => self.data[0].len(),
@@ -147,14 +167,17 @@ impl CNN {
                 LayerType::Convolutional(convolutional_layer) => {
                     input = convolutional_layer.forward_propagate(&input, is_training);
                 }
-                LayerType::MaxPooling(max_pooling_layer) => {
-                    input = max_pooling_layer.forward_propagate(&input, is_training);
+                LayerType::Dense(dense_layer) => {
+                    flatten_input = dense_layer.forward_propagate(&flatten_input, is_training);
                 }
                 LayerType::Flatten(flatten_layer) => {
                     flatten_input = flatten_layer.forward_propagate(&input, is_training);
                 }
-                LayerType::Dense(dense_layer) => {
-                    flatten_input = dense_layer.forward_propagate(&flatten_input, is_training);
+                LayerType::GlobalAvgPooling(avg_pooling_layer) => {
+                    flatten_input = avg_pooling_layer.forward_propagate(&input, is_training);
+                }
+                LayerType::MaxPooling(max_pooling_layer) => {
+                    input = max_pooling_layer.forward_propagate(&input, is_training);
                 }
             };
         }
@@ -171,14 +194,17 @@ impl CNN {
                 LayerType::Convolutional(convolutional_layer) => {
                     shaped_error = convolutional_layer.backward_propagate(shaped_error, self.lr);
                 }
-                LayerType::MaxPooling(max_pooling_layer) => {
-                    shaped_error = max_pooling_layer.backward_propagate(shaped_error);
+                LayerType::Dense(dense_layer) => {
+                    error = dense_layer.backward_propagate(error, self.lr);
                 }
                 LayerType::Flatten(flatten_layer) => {
                     shaped_error = flatten_layer.backward_propagate(&error);
                 }
-                LayerType::Dense(dense_layer) => {
-                    error = dense_layer.backward_propagate(error, self.lr);
+                LayerType::GlobalAvgPooling(avg_pooling_layer) => {
+                    shaped_error = avg_pooling_layer.backward_propagate(&error);
+                }
+                LayerType::MaxPooling(max_pooling_layer) => {
+                    shaped_error = max_pooling_layer.backward_propagate(shaped_error);
                 }
             }
         }
