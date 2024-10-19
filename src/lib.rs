@@ -100,13 +100,13 @@ pub fn get_ndimages(image_paths: &[String]) -> Vec<Array3<f64>> {
 
 fn init_cnn(epochs: usize, images: Vec<Array3<f64>>, lr: f64) -> cnn::CNN {
     let mut cnn = cnn::CNN::new(epochs, images, lr);
-    cnn.add_convolutional_layer(32, 3, 1);
+    cnn.add_convolutional_layer(32, 3, 1, false);
     cnn.add_max_pooling_layer(2, 2);
-    cnn.add_convolutional_layer(64, 3, 1);
+    cnn.add_convolutional_layer(64, 3, 1, false);
     cnn.add_max_pooling_layer(2, 2);
-    cnn.add_convolutional_layer(128, 3, 1);
+    cnn.add_convolutional_layer(128, 3, 1, false);
     cnn.add_max_pooling_layer(2, 2);
-    cnn.add_convolutional_layer(512, 3, 1);
+    cnn.add_convolutional_layer(512, 3, 1, false);
     cnn.add_max_pooling_layer(2, 2);
     cnn.add_flatten_layer();
     cnn.add_dense_layer(1024, 0.01, 0.5);

@@ -37,25 +37,34 @@ impl CNN {
         self.forward_propagate(self.data[img_num].clone(), false)
     }
 
-    pub fn add_convolutional_layer(&mut self, filters: usize, kernel_size: usize, strides: usize) {
+    pub fn add_convolutional_layer(
+        &mut self,
+        filters: usize,
+        kernel_size: usize,
+        strides: usize,
+        add_padding: bool,
+    ) {
         if strides == 0 {
             panic!("Stride should be greater than 0.");
         }
-        let layer = match self.layers.last() {
+        let input_size = match self.layers.last() {
             Some(layer) => match layer {
-                LayerType::Convolutional(layer) => {
-                    ConvolutionalLayer::new(filters, kernel_size, strides, layer.output_size)
-                }
-                LayerType::MaxPooling(layer) => {
-                    ConvolutionalLayer::new(filters, kernel_size, strides, layer.output_size)
-                }
-                _ => panic!("Add convolutional layer after a convolutional or max pool layer."),
+                LayerType::Convolutional(layer) => layer.output_size,
+                LayerType::MaxPooling(layer) => layer.output_size,
+                _ => panic!("Add convolutional layer after a convolutional or max pooling layer."),
             },
-            None => ConvolutionalLayer::new(filters, kernel_size, strides, INPUT_SHAPE),
+            None => INPUT_SHAPE,
         };
 
-        self.add_layer(LayerType::Convolutional(layer));
+        self.add_layer(LayerType::Convolutional(ConvolutionalLayer::new(
+            filters,
+            kernel_size,
+            strides,
+            input_size,
+            add_padding,
+        )));
     }
+
     pub fn add_global_avg_pooling_layer(&mut self) {
         let input_size = match self.layers.last() {
             Some(layer) => match layer {
