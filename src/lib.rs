@@ -96,17 +96,33 @@ pub fn get_ndimages(image_paths: &[String]) -> Vec<Array3<f64>> {
 
 fn init_cnn(epochs: usize, images: Vec<Array3<f64>>, lr: f64) -> cnn::CNN {
     let mut cnn = cnn::CNN::new(epochs, images, lr);
-    cnn.add_convolutional_layer(32, 3, 1, false);
-    cnn.add_max_pooling_layer(2, 2);
-    cnn.add_convolutional_layer(64, 3, 1, false);
-    cnn.add_max_pooling_layer(2, 2);
-    cnn.add_convolutional_layer(128, 3, 1, false);
-    cnn.add_max_pooling_layer(2, 2);
-    cnn.add_convolutional_layer(512, 3, 1, false);
-    cnn.add_max_pooling_layer(2, 2);
-    cnn.add_flatten_layer();
-    cnn.add_dense_layer(1024, 0.01, 0.5);
-    cnn.add_dense_layer(1024, 0.01, 0.5);
+    cnn.add_convolutional_layer(32, 3, 2, true);
+
+    cnn.add_mbconv_layer(1, 16, 3, 1, true);
+
+    cnn.add_mbconv_layer(6, 24, 3, 1, true);
+    cnn.add_mbconv_layer(6, 24, 3, 2, true);
+
+    cnn.add_mbconv_layer(6, 40, 5, 1, true);
+    cnn.add_mbconv_layer(6, 40, 5, 2, true);
+
+    cnn.add_mbconv_layer(6, 80, 3, 1, true);
+    cnn.add_mbconv_layer(6, 80, 3, 1, true);
+    cnn.add_mbconv_layer(6, 80, 3, 2, true);
+
+    cnn.add_mbconv_layer(6, 112, 5, 1, true);
+    cnn.add_mbconv_layer(6, 112, 5, 1, true);
+    cnn.add_mbconv_layer(6, 112, 5, 1, true);
+
+    cnn.add_mbconv_layer(6, 192, 5, 1, true);
+    cnn.add_mbconv_layer(6, 192, 5, 1, true);
+    cnn.add_mbconv_layer(6, 192, 5, 1, true);
+    cnn.add_mbconv_layer(6, 192, 5, 2, true);
+
+    cnn.add_mbconv_layer(6, 320, 3, 1, true);
+
+    cnn.add_convolutional_layer(1280, 1, 1, true);
+    cnn.add_global_avg_pooling_layer();
     cnn.add_dense_layer(CNN_OUTPUT_SIZE, 0.01, 0.0);
     cnn
 }
