@@ -83,33 +83,19 @@ impl CNN {
             None => INPUT_SHAPE,
         };
 
-        let expanded_channels = input_shape.0 * factor;
-        self.add_layer(LayerType::Convolutional(ConvolutionalLayer::new(
-            expanded_channels,
-            1,
-            1,
-            input_shape,
+        let layer1 =
+            ConvolutionalLayer::new(input_shape.0 * factor, 1, 1, input_shape, add_padding);
+        let layer2 = DepthwiseConvolutionalLayer::new(
+            kernel_size,
+            strides,
+            layer1.output_shape(),
             add_padding,
-        )));
-        self.add_layer(LayerType::DepthwiseConvLayer(
-            DepthwiseConvolutionalLayer::new(
-                kernel_size,
-                strides,
-                (expanded_channels, input_shape.1, input_shape.2),
-                add_padding,
-            ),
-        ));
-        self.add_layer(LayerType::Convolutional(ConvolutionalLayer::new(
-            filters,
-            1,
-            1,
-            (
-                expanded_channels,
-                input_shape.1 / strides,
-                input_shape.2 / strides,
-            ),
-            add_padding,
-        )));
+        );
+        let layer3 = ConvolutionalLayer::new(filters, 1, 1, layer2.output_shape(), add_padding);
+
+        self.add_layer(LayerType::Convolutional(layer1));
+        self.add_layer(LayerType::DepthwiseConvLayer(layer2));
+        self.add_layer(LayerType::Convolutional(layer3));
     }
 
     pub fn add_global_avg_pooling_layer(&mut self) {
