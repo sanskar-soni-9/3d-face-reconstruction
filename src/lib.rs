@@ -10,14 +10,10 @@ pub mod config;
 pub mod dataset;
 pub mod utils;
 
-pub fn infer(model: Option<&str>, image_paths: Vec<String>) {
+pub fn infer(model: &str, image_paths: Vec<String>) {
     // TODO: temporary
-
     let images = get_ndimages(&image_paths);
-    let mut cnn = match model {
-        Some(model) => CNN::load_with_data(model, images.clone()),
-        None => init_cnn(0, images.clone(), 0.0),
-    };
+    let mut cnn = CNN::load_with_data(model, images.clone());
     for (i, image) in image_paths.iter().enumerate() {
         let labels = cnn.infer(i);
         let mut new_img = get_image(image);
@@ -46,7 +42,7 @@ pub fn train(model: Option<&str>, data: Dataset, epochs: usize, lr: Option<&str>
         if count == 0 {
             break;
         }
-        let image = image_to_ndimage(get_image(&label.image_path));
+        let image = image_to_ndimage(get_image(label.image_path()));
         // TODO: Some images are zeros?
         if image.sum() == 0.0 {
             continue;

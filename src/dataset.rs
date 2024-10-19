@@ -6,17 +6,17 @@ use serde::{ser::SerializeStruct, Serialize};
 use std::fs;
 
 pub struct Labels {
-    pub image_path: String,
-    pub color_para: [f64; 7],
-    pub exp_para: [f64; 29],
-    pub illum_para: [f64; 10],
-    pub pose_para: [f64; 7],
-    pub shape_para: [f64; 199],
-    pub tex_para: [f64; 199],
-    pub roi: [f64; 4],
-    pub pt2d: [f64; 136],
-    pub pts_2d: [f64; 136],
-    pub pts_3d: [f64; 136],
+    image_path: String,
+    color_para: [f64; 7],
+    exp_para: [f64; 29],
+    illum_para: [f64; 10],
+    pose_para: [f64; 7],
+    shape_para: [f64; 199],
+    tex_para: [f64; 199],
+    roi: [f64; 4],
+    pt2d: [f64; 136],
+    pts_2d: [f64; 136],
+    pts_3d: [f64; 136],
 }
 
 impl Serialize for Labels {
@@ -39,6 +39,43 @@ impl Serialize for Labels {
         state.end()
     }
 }
+
+impl Labels {
+    pub fn image_path(&self) -> &str {
+        &self.image_path
+    }
+    pub fn color_para(&self) -> [f64; 7] {
+        self.color_para
+    }
+    pub fn exp_para(&self) -> [f64; 29] {
+        self.exp_para
+    }
+    pub fn illum_para(&self) -> [f64; 10] {
+        self.illum_para
+    }
+    pub fn pose_para(&self) -> [f64; 7] {
+        self.pose_para
+    }
+    pub fn shape_para(&self) -> [f64; 199] {
+        self.shape_para
+    }
+    pub fn tex_para(&self) -> [f64; 199] {
+        self.tex_para
+    }
+    pub fn roi(&self) -> [f64; 4] {
+        self.roi
+    }
+    pub fn pt2d(&self) -> [f64; 136] {
+        self.pt2d
+    }
+    pub fn pts_2d(&self) -> [f64; 136] {
+        self.pts_2d
+    }
+    pub fn pts_3d(&self) -> [f64; 136] {
+        self.pts_3d
+    }
+}
+
 pub struct Dataset {
     pub labels: Vec<Labels>,
 }
@@ -79,16 +116,16 @@ impl Dataset {
             for (field, data) in Self::get_headers().iter().zip(record.iter()) {
                 match field.as_str() {
                     "image_path" => image_path = data.to_string(),
-                    "color_para" => color_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
-                    "exp_para" => exp_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
-                    "illum_para" => illum_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
-                    "pose_para" => pose_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
-                    "shape_para" => shape_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
-                    "tex_para" => tex_para = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
-                    "roi" => roi = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
-                    "pt2d" => pt2d = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
-                    "pts_2d" => pts_2d = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
-                    "pts_3d" => pts_3d = vec_to_f64_array(&str_to_vec_f64(data).unwrap()),
+                    "color_para" => color_para = vec_to_array_f64(&str_to_vec_f64(data).unwrap()),
+                    "exp_para" => exp_para = vec_to_array_f64(&str_to_vec_f64(data).unwrap()),
+                    "illum_para" => illum_para = vec_to_array_f64(&str_to_vec_f64(data).unwrap()),
+                    "pose_para" => pose_para = vec_to_array_f64(&str_to_vec_f64(data).unwrap()),
+                    "shape_para" => shape_para = vec_to_array_f64(&str_to_vec_f64(data).unwrap()),
+                    "tex_para" => tex_para = vec_to_array_f64(&str_to_vec_f64(data).unwrap()),
+                    "roi" => roi = vec_to_array_f64(&str_to_vec_f64(data).unwrap()),
+                    "pt2d" => pt2d = vec_to_array_f64(&str_to_vec_f64(data).unwrap()),
+                    "pts_2d" => pts_2d = vec_to_array_f64(&str_to_vec_f64(data).unwrap()),
+                    "pts_3d" => pts_3d = vec_to_array_f64(&str_to_vec_f64(data).unwrap()),
                     _ => continue,
                 }
             }
@@ -197,7 +234,7 @@ impl Dataset {
                     "color_para" => {
                         color_para = match array.data() {
                             matfile::NumericData::Single { real, imag: _ } => {
-                                vec_to_f64_array_from_f32(real)
+                                vec_f32_to_array_f64(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -205,7 +242,7 @@ impl Dataset {
                     "exp_para" => {
                         exp_para = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f64_array(real)
+                                vec_to_array_f64(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -213,7 +250,7 @@ impl Dataset {
                     "illum_para" => {
                         illum_para = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f64_array(real)
+                                vec_to_array_f64(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -221,10 +258,10 @@ impl Dataset {
                     "pose_para" => {
                         pose_para = match array.data() {
                             matfile::NumericData::Single { real, imag: _ } => {
-                                vec_to_f64_array_from_f32(real)
+                                vec_f32_to_array_f64(real)
                             }
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f64_array(real)
+                                vec_to_array_f64(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -232,7 +269,7 @@ impl Dataset {
                     "shape_para" => {
                         shape_para = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f64_array(real)
+                                vec_to_array_f64(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -240,7 +277,7 @@ impl Dataset {
                     "tex_para" => {
                         tex_para = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                vec_to_f64_array(real)
+                                vec_to_array_f64(real)
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -248,7 +285,7 @@ impl Dataset {
                     "roi" => {
                         roi = match array.data() {
                             matfile::NumericData::Int16 { real, imag: _ } => {
-                                Self::scale_labels(vec_to_f64_array_from_i16(real))
+                                Self::scale_labels(vec_i16_to_array_f64(real))
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -256,7 +293,7 @@ impl Dataset {
                     "pt2d" => {
                         pt2d = match array.data() {
                             matfile::NumericData::Double { real, imag: _ } => {
-                                Self::scale_labels(vec_to_f64_array(real))
+                                Self::scale_labels(vec_to_array_f64(real))
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -264,7 +301,7 @@ impl Dataset {
                     "pts_2d" => {
                         pts_2d = match array.data() {
                             matfile::NumericData::Single { real, imag: _ } => {
-                                Self::scale_labels(vec_to_f64_array_from_f32(real))
+                                Self::scale_labels(vec_f32_to_array_f64(real))
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -272,7 +309,7 @@ impl Dataset {
                     "pts_3d" => {
                         pts_3d = match array.data() {
                             matfile::NumericData::Single { real, imag: _ } => {
-                                Self::scale_labels(vec_to_f64_array_from_f32(real))
+                                Self::scale_labels(vec_f32_to_array_f64(real))
                             }
                             _ => panic!("Unexpected Data"),
                         };

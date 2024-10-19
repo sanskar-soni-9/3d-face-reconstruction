@@ -10,7 +10,7 @@ pub struct ConvolutionalLayer {
     kernel_shape: (usize, usize, usize, usize),
     strides: usize,
     input_shape: (usize, usize, usize),
-    pub output_size: (usize, usize, usize), // (filters, height, width)
+    output_shape: (usize, usize, usize), // (filters, height, width)
     kernels: Array4<f64>,
     #[serde(skip)]
     output: Array3<f64>,
@@ -35,14 +35,14 @@ impl ConvolutionalLayer {
                 rng.sample(normal_distr)
             });
 
-        let mut output_size = (
+        let mut output_shape = (
             filters,
             (input_shape.1 - kernel_size) / strides + 1,
             (input_shape.2 - kernel_size) / strides + 1,
         );
 
         if padding {
-            output_size = (filters, input_shape.1 / strides, input_shape.2 / strides);
+            output_shape = (filters, input_shape.1 / strides, input_shape.2 / strides);
             input_shape = (
                 input_shape.0,
                 input_shape.1 + kernel_size - 1,
@@ -67,7 +67,7 @@ impl ConvolutionalLayer {
             strides,
             input_shape,
             kernels,
-            output_size,
+            output_shape,
             output: Array3::zeros((0, 0, 0)),
             input: Array3::zeros((0, 0, 0)),
             padding,
@@ -84,7 +84,7 @@ impl ConvolutionalLayer {
             ])
             .assign(input);
 
-        self.output = Array3::zeros(self.output_size);
+        self.output = Array3::zeros(self.output_shape);
         let mut indexed_output_iter: Vec<((usize, usize, usize), &mut f64)> =
             self.output.indexed_iter_mut().collect();
         indexed_output_iter
@@ -92,14 +92,14 @@ impl ConvolutionalLayer {
             .for_each(|((f, mut y, mut x), output_val)| {
                 y *= self.strides;
                 x *= self.strides;
-                let kernel_slice = self.kernels.slice(s![*f, .., .., ..]);
-                let input_slice = self.input.slice(s![
-                    ..,
-                    y..y + self.kernel_shape.2,
-                    x..x + self.kernel_shape.3
-                ]);
-
-                **output_val = relu((&input_slice * &kernel_slice).sum());
+                **output_val = relu(
+                    (&self.input.slice(s![
+                        ..,
+                        y..y + self.kernel_shape.2,
+                        x..x + self.kernel_shape.3
+                    ]) * &self.kernels.slice(s![*f, .., .., ..]))
+                        .sum(),
+                );
             });
         self.output.clone()
     }
@@ -147,12 +147,11 @@ impl ConvolutionalLayer {
             });
 
         if self.padding == (0, 0, 0, 0) {
-            let next_err_shape = (
+            let mut unpadded_next_error: Array3<f64> = Array3::zeros((
                 self.input_shape.0,
                 self.input_shape.1 - self.padding.2 - self.padding.3,
                 self.input_shape.2 - self.padding.0 - self.padding.1,
-            );
-            let mut unpadded_next_error: Array3<f64> = Array3::zeros(next_err_shape);
+            ));
             unpadded_next_error.assign(&next_error.slice(s![
                 ..,
                 self.padding.2..self.input_shape.1 - self.padding.3,
@@ -160,7 +159,6 @@ impl ConvolutionalLayer {
             ]));
             next_error = unpadded_next_error;
         }
-        println!("NEXT ERRROR: {:?}\n", next_error);
 
         let mut delta_k = Array4::zeros(self.kernel_shape);
         delta_k
@@ -185,5 +183,9 @@ impl ConvolutionalLayer {
         self.kernels -= &(&delta_k * lr);
 
         next_error
+    }
+
+    pub fn output_shape(&self) -> (usize, usize, usize) {
+        self.output_shape
     }
 }

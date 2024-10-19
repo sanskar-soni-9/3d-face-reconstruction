@@ -17,7 +17,6 @@ pub struct CNN {
     cur_epoch: usize,
     #[serde(skip)]
     data: Vec<Array3<f64>>,
-    last_train_data: usize,
     lr: f64,
 }
 
@@ -28,7 +27,6 @@ impl CNN {
             epochs,
             cur_epoch: 0,
             data: inputs,
-            last_train_data: 0,
             lr,
         }
     }
@@ -47,10 +45,10 @@ impl CNN {
         if strides == 0 {
             panic!("Stride should be greater than 0.");
         }
-        let input_size = match self.layers.last() {
+        let input_shape = match self.layers.last() {
             Some(layer) => match layer {
-                LayerType::Convolutional(layer) => layer.output_size,
-                LayerType::MaxPooling(layer) => layer.output_size,
+                LayerType::Convolutional(layer) => layer.output_shape(),
+                LayerType::MaxPooling(layer) => layer.output_shape(),
                 _ => panic!("Add convolutional layer after a convolutional or max pooling layer."),
             },
             None => INPUT_SHAPE,
@@ -60,16 +58,16 @@ impl CNN {
             filters,
             kernel_size,
             strides,
-            input_size,
+            input_shape,
             add_padding,
         )));
     }
 
     pub fn add_global_avg_pooling_layer(&mut self) {
-        let input_size = match self.layers.last() {
+        let input_shape = match self.layers.last() {
             Some(layer) => match layer {
-                LayerType::Convolutional(layer) => layer.output_size,
-                LayerType::MaxPooling(layer) => layer.output_size,
+                LayerType::Convolutional(layer) => layer.output_shape(),
+                LayerType::MaxPooling(layer) => layer.output_shape(),
                 _ => panic!(
                     "Add global average pooling layer after a convolutional or pooling layer."
                 ),
@@ -79,7 +77,7 @@ impl CNN {
             }
         };
         self.add_layer(LayerType::GlobalAvgPooling(GlobalAvgPoolingLayer::new(
-            input_size,
+            input_shape,
         )));
     }
 
@@ -87,10 +85,10 @@ impl CNN {
         if strides == 0 {
             panic!("Stride should be greater than 0.");
         }
-        let output_size = match self.layers.last() {
+        let output_shape = match self.layers.last() {
             Some(layer) => match layer {
-                LayerType::Convolutional(layer) => layer.output_size,
-                LayerType::MaxPooling(layer) => layer.output_size,
+                LayerType::Convolutional(layer) => layer.output_shape(),
+                LayerType::MaxPooling(layer) => layer.output_shape(),
                 _ => panic!("Add max pooling layer after a convolutional or max pooling layer."),
             },
             None => panic!("Add max pooling layer after a convolutional or max pooling layer."),
@@ -98,32 +96,32 @@ impl CNN {
 
         self.add_layer(LayerType::MaxPooling(MaxPoolingLayer::new(
             kernel_size,
-            output_size,
+            output_shape,
             strides,
         )));
     }
 
     pub fn add_flatten_layer(&mut self) {
-        let input_size = match self.layers.last() {
+        let input_shape = match self.layers.last() {
             Some(layer) => match layer {
-                LayerType::Convolutional(layer) => layer.output_size,
-                LayerType::MaxPooling(layer) => layer.output_size,
+                LayerType::Convolutional(layer) => layer.output_shape(),
+                LayerType::MaxPooling(layer) => layer.output_shape(),
                 _ => panic!("Add flatten layer after a convolutional or max pooling layer."),
             },
             None => panic!("Add flatten layer after a convolutional or max pooling layer."),
         };
-        self.add_layer(LayerType::Flatten(FlattenLayer::new(input_size)));
+        self.add_layer(LayerType::Flatten(FlattenLayer::new(input_shape)));
     }
 
     pub fn add_dense_layer(&mut self, neurons: usize, bias: f64, dropout_rate: f64) {
         let input_size = match self.layers.last() {
             Some(layer) => match layer {
-                LayerType::Dense(layer) => layer.output_size,
+                LayerType::Dense(layer) => layer.output_size(),
                 LayerType::Flatten(layer) => {
-                    layer.input_size.0 * layer.input_size.1 * layer.input_size.2
+                    layer.input_shape().0 * layer.input_shape().1 * layer.input_shape().2
                 }
-                LayerType::GlobalAvgPooling(layer) => layer.get_output_size(),
-                _ => panic!("Add dense layer after a flatten or dense layer."),
+                LayerType::GlobalAvgPooling(layer) => layer.output_shape(),
+                _ => panic!("Add dense layer after a flatten, global average or dense layer."),
             },
             None => self.data[0].len(),
         };
@@ -223,16 +221,17 @@ impl CNN {
         let mut training_labels: Vec<f64> = vec![];
         for train_label in TRAINIG_LABELS {
             match train_label {
-                "pts_2d" => training_labels.append(&mut labels.pts_2d.to_vec()),
-                "pts_3d" => training_labels.append(&mut labels.pts_3d.to_vec()),
-                "pose_para" => training_labels.append(&mut labels.pose_para.to_vec()),
-                "shape_para" => training_labels.append(&mut labels.shape_para.to_vec()),
-                "illum_para" => training_labels.append(&mut labels.illum_para.to_vec()),
-                "color_para" => training_labels.append(&mut labels.color_para.to_vec()),
-                "exp_para" => training_labels.append(&mut labels.exp_para.to_vec()),
-                "tex_para" => training_labels.append(&mut labels.tex_para.to_vec()),
-                "pt2d" => training_labels.append(&mut labels.pts_2d.to_vec()),
-                _ => panic!("Unknown Label"),
+                "pts_2d" => training_labels.append(&mut labels.pts_2d().to_vec()),
+                "pts_3d" => training_labels.append(&mut labels.pts_3d().to_vec()),
+                "pose_para" => training_labels.append(&mut labels.pose_para().to_vec()),
+                "shape_para" => training_labels.append(&mut labels.shape_para().to_vec()),
+                "illum_para" => training_labels.append(&mut labels.illum_para().to_vec()),
+                "color_para" => training_labels.append(&mut labels.color_para().to_vec()),
+                "exp_para" => training_labels.append(&mut labels.exp_para().to_vec()),
+                "tex_para" => training_labels.append(&mut labels.tex_para().to_vec()),
+                "pt2d" => training_labels.append(&mut labels.pts_2d().to_vec()),
+                "roi" => training_labels.append(&mut labels.roi().to_vec()),
+                _ => panic!("Unknown Label: {:?}", train_label),
             }
         }
         Array1::from_vec(training_labels)
@@ -257,7 +256,7 @@ impl CNN {
             .unwrap_or_else(|e| panic!("Error opening model file: {}\nError: {}", model_path, e));
         let mut model = String::new();
         file.read_to_string(&mut model)
-            .unwrap_or_else(|e| panic!("Error opening model file: {}\nError: {}", model_path, e));
+            .unwrap_or_else(|e| panic!("Error reading model file: {}\nError: {}", model_path, e));
         serde_json::from_str(&model)
             .unwrap_or_else(|e| panic!("Error deserializing model: {}\nError: {}", model_path, e))
     }

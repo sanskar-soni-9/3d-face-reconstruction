@@ -1,4 +1,4 @@
-pub fn vec_to_f64_array_from_f32<const N: usize>(vec: &[f32]) -> [f64; N] {
+pub fn vec_f32_to_array_f64<const N: usize>(vec: &[f32]) -> [f64; N] {
     let mut vec_iter = vec.iter();
     [0.0; N].map(|_| {
         *vec_iter
@@ -8,7 +8,7 @@ pub fn vec_to_f64_array_from_f32<const N: usize>(vec: &[f32]) -> [f64; N] {
     })
 }
 
-pub fn vec_to_f64_array_from_i16<const N: usize>(vec: &[i16]) -> [f64; N] {
+pub fn vec_i16_to_array_f64<const N: usize>(vec: &[i16]) -> [f64; N] {
     let mut vec_iter = vec.iter();
     [0.0; N].map(|_| {
         *vec_iter
@@ -18,7 +18,7 @@ pub fn vec_to_f64_array_from_i16<const N: usize>(vec: &[i16]) -> [f64; N] {
     })
 }
 
-pub fn vec_to_f64_array<const N: usize>(vec: &Vec<f64>) -> [f64; N] {
+pub fn vec_to_array_f64<const N: usize>(vec: &Vec<f64>) -> [f64; N] {
     vec.to_owned().try_into().unwrap_or_else(|v: Vec<f64>| {
         panic!("Expected a Vec of length {} but it was {}", N, v.len())
     })

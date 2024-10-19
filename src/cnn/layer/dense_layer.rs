@@ -9,7 +9,7 @@ use super::{relu, relu_prime};
 pub struct DenseLayer {
     weights: Array2<f64>,
     biases: Array1<f64>,
-    pub output_size: usize,
+    output_size: usize,
     dropout_rate: f64,
     #[serde(skip)]
     input: Array1<f64>,
@@ -23,11 +23,10 @@ impl DenseLayer {
     pub fn new(input_size: usize, output_size: usize, dropout_rate: f64, bias: f64) -> Self {
         let std_dev = (2.0 / input_size as f64).sqrt();
         let normal_distr = Normal::new(0.0, std_dev).unwrap();
+        let mut rng = rand::thread_rng();
 
         let mut weights: Array2<f64> = Array2::zeros((output_size, input_size));
-        let Some(weights_slice) = weights.as_slice_mut() else { panic!("Unexpected error occurred!")};
-        weights_slice.par_iter_mut().for_each(|val| {
-            let mut rng = rand::thread_rng();
+        weights.iter_mut().for_each(|val| {
             *val = rng.sample(normal_distr);
         });
         let biases: Array1<f64> = Array1::from_elem(output_size, bias);
@@ -109,5 +108,9 @@ impl DenseLayer {
                 *bias -= error[[i]] * lr;
             });
         next_error
+    }
+
+    pub fn output_size(&self) -> usize {
+        self.output_size
     }
 }

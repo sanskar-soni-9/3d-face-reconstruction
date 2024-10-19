@@ -22,13 +22,17 @@ fn main() {
             }
             train_model(model, lr);
         }
-        _ => {
+        "infer" => {
             println!("ARGS: {:?}", args);
-            let mut model = None;
-            if args.len() >= 3 {
-                model = Some(args[2].as_str());
+            if args.len() < 3 {
+                panic!(
+                    "Invalid args...\nTry `face_reconstruction infer (model_path) (image_path)+`"
+                );
             }
-            infer_model(model, args[3..].to_vec());
+            infer_model(args[2].as_str(), args[3..].to_vec());
+        }
+        _ => {
+            panic!("Invalid args...");
         }
     }
 }
@@ -37,7 +41,7 @@ fn prepare_data() -> Dataset {
     Dataset::prepare()
 }
 
-fn infer_model(model: Option<&str>, images: Vec<String>) {
+fn infer_model(model: &str, images: Vec<String>) {
     face_reconstruction::infer(model, images);
 }
 
