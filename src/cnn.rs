@@ -1,8 +1,8 @@
 use crate::config::{EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, TRAINIG_LABELS};
 use crate::dataset::Labels;
 use layer::{
-    convolutional_layer::*, dense_layer::*, flatten_layer::*, global_avg_pooling_layer::*,
-    max_pooling_layer::*, LayerType,
+    convolutional_layer::*, dense_layer::*, depthwise_conv_layer::*, flatten_layer::*,
+    global_avg_pooling_layer::*, max_pooling_layer::*, LayerType,
 };
 use ndarray::{Array1, Array3};
 use serde::{Deserialize, Serialize};
@@ -59,6 +59,55 @@ impl CNN {
             kernel_size,
             strides,
             input_shape,
+            add_padding,
+        )));
+    }
+
+    pub fn add_mbconv_layer(
+        &mut self,
+        factor: usize,
+        filters: usize,
+        kernel_size: usize,
+        strides: usize,
+        add_padding: bool,
+    ) {
+        if strides == 0 {
+            panic!("Stride should be greater than 0.");
+        }
+        let input_shape = match self.layers.last() {
+            Some(layer) => match layer {
+                LayerType::Convolutional(layer) => layer.output_shape(),
+                LayerType::MaxPooling(layer) => layer.output_shape(),
+                _ => panic!("Add convolutional layer after a convolutional or max pool layer."),
+            },
+            None => INPUT_SHAPE,
+        };
+
+        let expanded_channels = input_shape.0 * factor;
+        self.add_layer(LayerType::Convolutional(ConvolutionalLayer::new(
+            expanded_channels,
+            1,
+            1,
+            input_shape,
+            add_padding,
+        )));
+        self.add_layer(LayerType::DepthwiseConvLayer(
+            DepthwiseConvolutionalLayer::new(
+                kernel_size,
+                strides,
+                (expanded_channels, input_shape.1, input_shape.2),
+                add_padding,
+            ),
+        ));
+        self.add_layer(LayerType::Convolutional(ConvolutionalLayer::new(
+            filters,
+            1,
+            1,
+            (
+                expanded_channels,
+                input_shape.1 / strides,
+                input_shape.2 / strides,
+            ),
             add_padding,
         )));
     }
@@ -177,6 +226,9 @@ impl CNN {
                 LayerType::Dense(dense_layer) => {
                     flatten_input = dense_layer.forward_propagate(&flatten_input, is_training);
                 }
+                LayerType::DepthwiseConvLayer(depthwise_conv_layer) => {
+                    input = depthwise_conv_layer.forward_propagate(input, is_training);
+                }
                 LayerType::Flatten(flatten_layer) => {
                     flatten_input = flatten_layer.forward_propagate(&input, is_training);
                 }
@@ -203,6 +255,9 @@ impl CNN {
                 }
                 LayerType::Dense(dense_layer) => {
                     error = dense_layer.backward_propagate(error, self.lr);
+                }
+                LayerType::DepthwiseConvLayer(depthwise_conv_layer) => {
+                    shaped_error = depthwise_conv_layer.backward_propagate(shaped_error, self.lr);
                 }
                 LayerType::Flatten(flatten_layer) => {
                     shaped_error = flatten_layer.backward_propagate(&error);
