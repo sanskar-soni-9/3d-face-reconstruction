@@ -146,7 +146,7 @@ impl ConvolutionalLayer {
                 }
             });
 
-        if self.padding == (0, 0, 0, 0) {
+        if self.padding != (0, 0, 0, 0) {
             let mut unpadded_next_error: Array3<f64> = Array3::zeros((
                 self.input_shape.0,
                 self.input_shape.1 - self.padding.2 - self.padding.3,
