@@ -48,7 +48,7 @@ impl MaxPoolingLayer {
         output
     }
 
-    pub fn backward_propagate(&mut self, error: Array3<f64>) -> Array3<f64> {
+    pub fn backward_propagate(&self, error: Array3<f64>) -> Array3<f64> {
         let mut next_error: Array3<f64> = Array3::zeros(self.input_shape);
         for (f, x, y, ix, iy) in &self.max_indices {
             next_error[[*f, *iy, *ix]] = error[[*f, *y, *x]];

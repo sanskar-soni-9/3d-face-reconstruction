@@ -1,4 +1,4 @@
-use crate::{cnn::activation::Activation, config::DENSE_WEIGHT_SCALE};
+use crate::config::DENSE_WEIGHT_SCALE;
 use ndarray::{s, Array1, Array2};
 use rand::Rng;
 use rand_distr::Uniform;
@@ -16,17 +16,10 @@ pub struct DenseLayer {
     output: Array1<f64>,
     #[serde(skip)]
     dropout_mask: Array1<f64>,
-    activation: Activation,
 }
 
 impl DenseLayer {
-    pub fn new(
-        input_size: usize,
-        output_size: usize,
-        dropout_rate: f64,
-        bias: f64,
-        activation: Activation,
-    ) -> Self {
+    pub fn new(input_size: usize, output_size: usize, dropout_rate: f64, bias: f64) -> Self {
         let limit = (3.0 * (DENSE_WEIGHT_SCALE / input_size as f64)).sqrt();
         let normal_distr = Uniform::new(-limit, limit);
         let mut rng = rand::thread_rng();
@@ -45,7 +38,6 @@ impl DenseLayer {
             input: Array1::zeros(0),
             output: Array1::zeros(0),
             dropout_mask: Array1::zeros(0),
-            activation,
         }
     }
 
@@ -60,7 +52,7 @@ impl DenseLayer {
                 for j in 0..self.input.len() {
                     wi += self.weights[[i, j]] * self.input[[j]];
                 }
-                *val = self.activation.activate(wi + self.biases[[i]]);
+                *val = wi + self.biases[[i]];
             });
 
         if is_training {
@@ -80,10 +72,6 @@ impl DenseLayer {
 
     pub fn backward_propagate(&mut self, mut error: Array1<f64>, lr: f64) -> Array1<f64> {
         error *= &self.dropout_mask;
-        error
-            .indexed_iter_mut()
-            .par_bridge()
-            .for_each(|(i, e)| *e *= self.activation.deactivate(self.output[i]));
 
         let mut next_error: Array1<f64> = Array1::zeros(self.input.len());
         next_error

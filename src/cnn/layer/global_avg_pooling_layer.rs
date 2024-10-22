@@ -22,7 +22,7 @@ impl GlobalAvgPoolingLayer {
         output
     }
 
-    pub fn backward_propagate(&mut self, error: &Array1<f64>) -> Array3<f64> {
+    pub fn backward_propagate(&self, error: &Array1<f64>) -> Array3<f64> {
         let avg_prime = 1.0 / (self.input_shape.1 * self.input_shape.2) as f64;
         let mut next_error: Array3<f64> = Array3::zeros(self.input_shape);
         next_error
@@ -33,7 +33,7 @@ impl GlobalAvgPoolingLayer {
         next_error
     }
 
-    pub fn output_shape(&self) -> usize {
+    pub fn output_size(&self) -> usize {
         self.input_shape.0
     }
 }

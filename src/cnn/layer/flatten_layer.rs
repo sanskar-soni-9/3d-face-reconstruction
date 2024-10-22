@@ -14,7 +14,7 @@ impl FlattenLayer {
         input.flatten().to_owned()
     }
 
-    pub fn backward_propagate(&mut self, error: &Array1<f64>) -> Array3<f64> {
+    pub fn backward_propagate(&self, error: &Array1<f64>) -> Array3<f64> {
         error
             .to_owned()
             .into_shape_with_order(self.input_shape)
@@ -23,5 +23,9 @@ impl FlattenLayer {
 
     pub fn input_shape(&self) -> (usize, usize, usize) {
         self.input_shape
+    }
+
+    pub fn output_size(&self) -> usize {
+        self.input_shape.0 * self.input_shape.1 * self.input_shape.2
     }
 }

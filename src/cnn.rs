@@ -2,8 +2,8 @@ use crate::config::{DEFAULT_LEARNING_RATE, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR,
 use crate::dataset::Labels;
 use activation::Activation;
 use layer::{
-    convolutional_layer::*, dense_layer::*, depthwise_conv_layer::*, flatten_layer::*,
-    global_avg_pooling_layer::*, max_pooling_layer::*, LayerType,
+    activation_layer::*, convolutional_layer::*, dense_layer::*, depthwise_conv_layer::*,
+    flatten_layer::*, global_avg_pooling_layer::*, max_pooling_layer::*, LayerType,
 };
 use ndarray::{Array1, Array3};
 use serde::{Deserialize, Serialize};
@@ -37,19 +37,56 @@ impl CNN {
         self.forward_propagate(self.data[img_num].clone(), false)
     }
 
+    pub fn add_activation_layer(&mut self, activation: Activation) {
+        let input_shape = match self.layers.last() {
+            Some(layer) => match layer {
+                LayerType::Activation(layer) => layer.input_shape().to_owned(),
+                LayerType::Convolutional(layer) => {
+                    let shape = layer.output_shape();
+                    vec![shape.0, shape.1, shape.2]
+                }
+                LayerType::Dense(layer) => vec![layer.output_size()],
+                LayerType::DepthwiseConvLayer(layer) => {
+                    let shape = layer.output_shape();
+                    vec![shape.0, shape.1, shape.2]
+                }
+                LayerType::Flatten(layer) => vec![layer.output_size()],
+                LayerType::GlobalAvgPooling(layer) => vec![layer.output_size()],
+                LayerType::MaxPooling(layer) => {
+                    let shape = layer.output_shape();
+                    vec![shape.0, shape.1, shape.2]
+                }
+            },
+            None => panic!("Activation Layer can not be the first layer."),
+        };
+        self.add_layer(LayerType::Activation(ActivationLayer::new(
+            activation,
+            input_shape,
+        )));
+    }
+
     pub fn add_convolutional_layer(
         &mut self,
         filters: usize,
         kernel_size: usize,
         strides: usize,
         add_padding: bool,
-        activation: Activation,
     ) {
         if strides == 0 {
             panic!("Stride should be greater than 0.");
         }
         let input_shape = match self.layers.last() {
             Some(layer) => match layer {
+                LayerType::Activation(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 3 {
+                        (shape[0], shape[1], shape[2])
+                    } else {
+                        panic!(
+                            "Add convolutional layer after a convolutional or max pooling layer."
+                        );
+                    }
+                }
                 LayerType::Convolutional(layer) => layer.output_shape(),
                 LayerType::MaxPooling(layer) => layer.output_shape(),
                 _ => panic!("Add convolutional layer after a convolutional or max pooling layer."),
@@ -63,7 +100,6 @@ impl CNN {
             strides,
             input_shape,
             add_padding,
-            activation,
         )));
     }
 
@@ -80,45 +116,52 @@ impl CNN {
         }
         let input_shape = match self.layers.last() {
             Some(layer) => match layer {
+                LayerType::Activation(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 3 {
+                        (shape[0], shape[1], shape[2])
+                    } else {
+                        println!("SHAPE: {:?}", shape);
+                        panic!("Add mbconv layer after a convolutional or max pool layer.");
+                    }
+                }
                 LayerType::Convolutional(layer) => layer.output_shape(),
                 LayerType::MaxPooling(layer) => layer.output_shape(),
-                _ => panic!("Add convolutional layer after a convolutional or max pool layer."),
+                _ => panic!("Add mbconv layer after a convolutional or max pool layer."),
             },
             None => INPUT_SHAPE,
         };
 
-        let layer1 = ConvolutionalLayer::new(
-            input_shape.0 * factor,
-            1,
-            1,
-            input_shape,
-            add_padding,
-            Activation::ReLU6,
-        );
+        let layer1 =
+            ConvolutionalLayer::new(input_shape.0 * factor, 1, 1, input_shape, add_padding);
         let layer2 = DepthwiseConvolutionalLayer::new(
             kernel_size,
             strides,
             layer1.output_shape(),
             add_padding,
-            Activation::ReLU6,
         );
-        let layer3 = ConvolutionalLayer::new(
-            filters,
-            1,
-            1,
-            layer2.output_shape(),
-            add_padding,
-            Activation::Linear,
-        );
+        let layer3 = ConvolutionalLayer::new(filters, 1, 1, layer2.output_shape(), add_padding);
 
         self.add_layer(LayerType::Convolutional(layer1));
+        self.add_activation_layer(Activation::ReLU6);
         self.add_layer(LayerType::DepthwiseConvLayer(layer2));
+        self.add_activation_layer(Activation::ReLU6);
         self.add_layer(LayerType::Convolutional(layer3));
     }
 
     pub fn add_global_avg_pooling_layer(&mut self) {
         let input_shape = match self.layers.last() {
             Some(layer) => match layer {
+                LayerType::Activation(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 3 {
+                        (shape[0], shape[1], shape[2])
+                    } else {
+                        panic!(
+                            "Add global average pooling layer after a convolutional or pooling layer."
+                        );
+                    }
+                }
                 LayerType::Convolutional(layer) => layer.output_shape(),
                 LayerType::MaxPooling(layer) => layer.output_shape(),
                 _ => panic!(
@@ -140,6 +183,14 @@ impl CNN {
         }
         let output_shape = match self.layers.last() {
             Some(layer) => match layer {
+                LayerType::Activation(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 3 {
+                        (shape[0], shape[1], shape[2])
+                    } else {
+                        panic!("Add max pooling layer after a convolutional or max pooling layer.");
+                    }
+                }
                 LayerType::Convolutional(layer) => layer.output_shape(),
                 LayerType::MaxPooling(layer) => layer.output_shape(),
                 _ => panic!("Add max pooling layer after a convolutional or max pooling layer."),
@@ -157,6 +208,14 @@ impl CNN {
     pub fn add_flatten_layer(&mut self) {
         let input_shape = match self.layers.last() {
             Some(layer) => match layer {
+                LayerType::Activation(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 3 {
+                        (shape[0], shape[1], shape[2])
+                    } else {
+                        panic!("Add flatten layer after a convolutional or max pooling layer.");
+                    }
+                }
                 LayerType::Convolutional(layer) => layer.output_shape(),
                 LayerType::MaxPooling(layer) => layer.output_shape(),
                 _ => panic!("Add flatten layer after a convolutional or max pooling layer."),
@@ -166,20 +225,22 @@ impl CNN {
         self.add_layer(LayerType::Flatten(FlattenLayer::new(input_shape)));
     }
 
-    pub fn add_dense_layer(
-        &mut self,
-        neurons: usize,
-        bias: f64,
-        dropout_rate: f64,
-        activation: Activation,
-    ) {
+    pub fn add_dense_layer(&mut self, neurons: usize, bias: f64, dropout_rate: f64) {
         let input_size = match self.layers.last() {
             Some(layer) => match layer {
+                LayerType::Activation(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 1 {
+                        shape[0]
+                    } else {
+                        panic!("Add dense layer after a flatten, global average or dense layer.");
+                    }
+                }
                 LayerType::Dense(layer) => layer.output_size(),
                 LayerType::Flatten(layer) => {
                     layer.input_shape().0 * layer.input_shape().1 * layer.input_shape().2
                 }
-                LayerType::GlobalAvgPooling(layer) => layer.output_shape(),
+                LayerType::GlobalAvgPooling(layer) => layer.output_size(),
                 _ => panic!("Add dense layer after a flatten, global average or dense layer."),
             },
             None => self.data[0].len(),
@@ -190,7 +251,6 @@ impl CNN {
             neurons,
             bias,
             dropout_rate,
-            activation,
         )));
     }
 
@@ -231,6 +291,14 @@ impl CNN {
         let mut flatten_input = Array1::zeros(0);
         for layer in self.layers.iter_mut() {
             match layer {
+                LayerType::Activation(activation_layer) => {
+                    if activation_layer.input_shape().len() == 1 {
+                        flatten_input =
+                            activation_layer.forward_propagate(&flatten_input, is_training);
+                    } else {
+                        input = activation_layer.forward_propagate(&input, is_training);
+                    }
+                }
                 LayerType::Convolutional(convolutional_layer) => {
                     input = convolutional_layer.forward_propagate(&input, is_training);
                 }
@@ -255,12 +323,16 @@ impl CNN {
     }
 
     fn backward_propagate(&mut self, mut error: Array1<f64>) {
-        let mut shaped_error = error
-            .to_owned()
-            .into_shape_with_order((1, 1, error.len()))
-            .expect("Unexpected ERROR occured while converting error to shaped error.");
+        let mut shaped_error = Array3::zeros((0, 0, 0));
         for layer in self.layers.iter_mut().rev() {
             match layer {
+                LayerType::Activation(activation_layer) => {
+                    if activation_layer.input_shape().len() == 1 {
+                        error = activation_layer.backward_propagate(error, self.lr);
+                    } else {
+                        shaped_error = activation_layer.backward_propagate(shaped_error, self.lr);
+                    }
+                }
                 LayerType::Convolutional(convolutional_layer) => {
                     shaped_error = convolutional_layer.backward_propagate(shaped_error, self.lr);
                 }

@@ -1,4 +1,4 @@
-use crate::{cnn::activation::Activation, config::CONV_WEIGHT_SCALE};
+use crate::config::CONV_WEIGHT_SCALE;
 use ndarray::{s, Array3, Array4, Axis};
 use rand::Rng;
 use rand_distr::Normal;
@@ -17,7 +17,6 @@ pub struct ConvolutionalLayer {
     #[serde(skip)]
     input: Array3<f64>,
     padding: (usize, usize, usize, usize), // (left, right, top, bottom)
-    activation: Activation,
 }
 
 impl ConvolutionalLayer {
@@ -27,7 +26,6 @@ impl ConvolutionalLayer {
         strides: usize,
         mut input_shape: (usize, usize, usize),
         padding: bool,
-        activation: Activation,
     ) -> Self {
         if strides == 0 {
             panic!("Stride should be greater than 0.");
@@ -77,7 +75,6 @@ impl ConvolutionalLayer {
             output: Array3::zeros((0, 0, 0)),
             input: Array3::zeros((0, 0, 0)),
             padding,
-            activation,
         }
     }
 
@@ -99,25 +96,17 @@ impl ConvolutionalLayer {
             .for_each(|((f, mut y, mut x), output_val)| {
                 y *= self.strides;
                 x *= self.strides;
-                **output_val = self.activation.activate(
-                    (&self.input.slice(s![
-                        ..,
-                        y..y + self.kernel_shape.2,
-                        x..x + self.kernel_shape.3
-                    ]) * &self.kernels.slice(s![*f, .., .., ..]))
-                        .sum(),
-                );
+                **output_val = (&self.input.slice(s![
+                    ..,
+                    y..y + self.kernel_shape.2,
+                    x..x + self.kernel_shape.3
+                ]) * &self.kernels.slice(s![*f, .., .., ..]))
+                    .sum();
             });
         self.output.clone()
     }
 
-    pub fn backward_propagate(&mut self, mut error: Array3<f64>, lr: f64) -> Array3<f64> {
-        error
-            .iter_mut()
-            .zip(self.output.iter())
-            .par_bridge()
-            .for_each(|(e, o)| *e *= self.activation.deactivate(*o));
-
+    pub fn backward_propagate(&mut self, error: Array3<f64>, lr: f64) -> Array3<f64> {
         let mut next_error: Array3<f64> = Array3::zeros(self.input_shape);
         next_error
             .axis_iter_mut(Axis(1))
