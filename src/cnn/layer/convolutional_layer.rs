@@ -1,4 +1,4 @@
-use crate::cnn::activation::Activation;
+use crate::{cnn::activation::Activation, config::CONV_WEIGHT_SCALE};
 use ndarray::{s, Array3, Array4, Axis};
 use rand::Rng;
 use rand_distr::Normal;
@@ -34,7 +34,7 @@ impl ConvolutionalLayer {
         }
 
         let mut rng = rand::thread_rng();
-        let std_dev = (2.0 / (kernel_size * kernel_size * input_shape.0) as f64).sqrt();
+        let std_dev = (CONV_WEIGHT_SCALE / (kernel_size * kernel_size * filters) as f64).sqrt();
         let normal_distr = Normal::new(0.0, std_dev).unwrap();
         let kernels =
             Array4::from_shape_fn((filters, input_shape.0, kernel_size, kernel_size), |_| {

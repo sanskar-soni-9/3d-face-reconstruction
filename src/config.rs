@@ -17,6 +17,8 @@ pub const TRAINIG_LABELS: [&str; 10] = [
     "roi",        // 4
 ];
 pub const CNN_OUTPUT_SIZE: usize = 863;
+pub const CONV_WEIGHT_SCALE: f64 = 2.0;
+pub const DENSE_WEIGHT_SCALE: f64 = 1.0 / 3.0;
 
 // Dirs & Paths
 pub const OUTPUT_DIR: &str = "results";

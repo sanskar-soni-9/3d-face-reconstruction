@@ -1,7 +1,7 @@
-use crate::cnn::activation::Activation;
+use crate::{cnn::activation::Activation, config::DENSE_WEIGHT_SCALE};
 use ndarray::{s, Array1, Array2};
 use rand::Rng;
-use rand_distr::Normal;
+use rand_distr::Uniform;
 use rayon::prelude::*;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -27,8 +27,8 @@ impl DenseLayer {
         bias: f64,
         activation: Activation,
     ) -> Self {
-        let std_dev = (2.0 / input_size as f64).sqrt();
-        let normal_distr = Normal::new(0.0, std_dev).unwrap();
+        let limit = (3.0 * (DENSE_WEIGHT_SCALE / input_size as f64)).sqrt();
+        let normal_distr = Uniform::new(-limit, limit);
         let mut rng = rand::thread_rng();
 
         let mut weights: Array2<f64> = Array2::zeros((output_size, input_size));

@@ -1,4 +1,4 @@
-use crate::cnn::activation::Activation;
+use crate::{cnn::activation::Activation, config::CONV_WEIGHT_SCALE};
 use ndarray::{s, Array3, Axis};
 use rand::Rng;
 use rand_distr::Normal;
@@ -33,7 +33,8 @@ impl DepthwiseConvolutionalLayer {
         }
 
         let mut rng = rand::thread_rng();
-        let std_dev = (2.0 / (kernel_size * kernel_size * input_shape.0) as f64).sqrt();
+        let std_dev =
+            (CONV_WEIGHT_SCALE / (kernel_size * kernel_size * input_shape.0) as f64).sqrt();
         let normal_distr = Normal::new(0.0, std_dev).unwrap();
         let kernel_shape = (input_shape.0, kernel_size, kernel_size);
         let kernels = Array3::from_shape_fn(kernel_shape, |_| rng.sample(normal_distr));
