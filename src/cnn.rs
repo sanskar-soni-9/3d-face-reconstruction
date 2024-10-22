@@ -1,5 +1,6 @@
 use crate::config::{DEFAULT_LEARNING_RATE, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, TRAINIG_LABELS};
 use crate::dataset::Labels;
+use activation::Activation;
 use layer::{
     convolutional_layer::*, dense_layer::*, depthwise_conv_layer::*, flatten_layer::*,
     global_avg_pooling_layer::*, max_pooling_layer::*, LayerType,
@@ -8,6 +9,7 @@ use ndarray::{Array1, Array3};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
+pub mod activation;
 mod layer;
 
 #[derive(Serialize, Deserialize)]
@@ -41,6 +43,7 @@ impl CNN {
         kernel_size: usize,
         strides: usize,
         add_padding: bool,
+        activation: Activation,
     ) {
         if strides == 0 {
             panic!("Stride should be greater than 0.");
@@ -60,6 +63,7 @@ impl CNN {
             strides,
             input_shape,
             add_padding,
+            activation,
         )));
     }
 
@@ -83,15 +87,29 @@ impl CNN {
             None => INPUT_SHAPE,
         };
 
-        let layer1 =
-            ConvolutionalLayer::new(input_shape.0 * factor, 1, 1, input_shape, add_padding);
+        let layer1 = ConvolutionalLayer::new(
+            input_shape.0 * factor,
+            1,
+            1,
+            input_shape,
+            add_padding,
+            Activation::ReLU6,
+        );
         let layer2 = DepthwiseConvolutionalLayer::new(
             kernel_size,
             strides,
             layer1.output_shape(),
             add_padding,
+            Activation::ReLU6,
         );
-        let layer3 = ConvolutionalLayer::new(filters, 1, 1, layer2.output_shape(), add_padding);
+        let layer3 = ConvolutionalLayer::new(
+            filters,
+            1,
+            1,
+            layer2.output_shape(),
+            add_padding,
+            Activation::Linear,
+        );
 
         self.add_layer(LayerType::Convolutional(layer1));
         self.add_layer(LayerType::DepthwiseConvLayer(layer2));
@@ -148,7 +166,13 @@ impl CNN {
         self.add_layer(LayerType::Flatten(FlattenLayer::new(input_shape)));
     }
 
-    pub fn add_dense_layer(&mut self, neurons: usize, bias: f64, dropout_rate: f64) {
+    pub fn add_dense_layer(
+        &mut self,
+        neurons: usize,
+        bias: f64,
+        dropout_rate: f64,
+        activation: Activation,
+    ) {
         let input_size = match self.layers.last() {
             Some(layer) => match layer {
                 LayerType::Dense(layer) => layer.output_size(),
@@ -166,6 +190,7 @@ impl CNN {
             neurons,
             bias,
             dropout_rate,
+            activation,
         )));
     }
 

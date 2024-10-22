@@ -1,4 +1,4 @@
-use cnn::CNN;
+use cnn::{activation::Activation, CNN};
 use config::{CNN_OUTPUT_SIZE, DEFAULT_LEARNING_RATE, INPUT_SHAPE, OUTPUT_DIR};
 use dataset::Dataset;
 use image::{imageops::FilterType, DynamicImage, GenericImage, GenericImageView, Rgba};
@@ -90,7 +90,7 @@ pub fn get_ndimages(image_paths: &[String]) -> Vec<Array3<f64>> {
 
 fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
     let mut cnn = cnn::CNN::new(epochs, images, DEFAULT_LEARNING_RATE);
-    cnn.add_convolutional_layer(32, 3, 2, true);
+    cnn.add_convolutional_layer(32, 3, 2, true, Activation::SiLU);
 
     cnn.add_mbconv_layer(1, 16, 3, 1, true);
 
@@ -115,8 +115,8 @@ fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
 
     cnn.add_mbconv_layer(6, 320, 3, 1, true);
 
-    cnn.add_convolutional_layer(1280, 1, 1, true);
+    cnn.add_convolutional_layer(1280, 1, 1, true, Activation::SiLU);
     cnn.add_global_avg_pooling_layer();
-    cnn.add_dense_layer(CNN_OUTPUT_SIZE, 0.01, 0.0);
+    cnn.add_dense_layer(CNN_OUTPUT_SIZE, 0.0, 0.0, Activation::SiLU);
     cnn
 }

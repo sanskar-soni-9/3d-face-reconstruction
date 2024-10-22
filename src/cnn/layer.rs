@@ -14,17 +14,3 @@ pub enum LayerType {
     GlobalAvgPooling(global_avg_pooling_layer::GlobalAvgPoolingLayer),
     MaxPooling(max_pooling_layer::MaxPoolingLayer),
 }
-
-pub fn relu(x: f64) -> f64 {
-    if x > 0.0 {
-        return x;
-    }
-    0.0
-}
-
-pub fn relu_prime(x: f64) -> f64 {
-    if x > 0.0 {
-        return 1.0;
-    }
-    0.0
-}

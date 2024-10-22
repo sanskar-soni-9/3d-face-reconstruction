@@ -1,4 +1,4 @@
-use super::{relu, relu_prime};
+use crate::cnn::activation::Activation;
 use ndarray::{s, Array3, Axis};
 use rand::Rng;
 use rand_distr::Normal;
@@ -17,6 +17,7 @@ pub struct DepthwiseConvolutionalLayer {
     #[serde(skip)]
     input: Array3<f64>,
     padding: (usize, usize, usize, usize), // (left, right, top, bottom)
+    activation: Activation,
 }
 
 impl DepthwiseConvolutionalLayer {
@@ -25,6 +26,7 @@ impl DepthwiseConvolutionalLayer {
         strides: usize,
         mut input_shape: (usize, usize, usize),
         padding: bool,
+        activation: Activation,
     ) -> Self {
         if strides == 0 {
             panic!("Stride should be greater than 0.");
@@ -76,6 +78,7 @@ impl DepthwiseConvolutionalLayer {
             output: Array3::zeros((0, 0, 0)),
             input: Array3::zeros((0, 0, 0)),
             padding,
+            activation,
         }
     }
 
@@ -96,7 +99,7 @@ impl DepthwiseConvolutionalLayer {
             .for_each(|((f, mut r, mut c), o)| {
                 r *= self.strides;
                 c *= self.strides;
-                *o = relu(
+                *o = self.activation.activate(
                     (&self.input.slice(s![
                         f,
                         r..r + self.kernel_shape.1,
@@ -105,7 +108,6 @@ impl DepthwiseConvolutionalLayer {
                         .sum(),
                 );
             });
-
         self.output.clone()
     }
 
@@ -114,7 +116,8 @@ impl DepthwiseConvolutionalLayer {
             .iter_mut()
             .zip(self.output.iter())
             .par_bridge()
-            .for_each(|(e, o)| *e *= relu_prime(*o));
+            .for_each(|(e, o)| *e *= self.activation.deactivate(*o));
+
         let mut next_error: Array3<f64> = Array3::zeros(self.input_shape);
         next_error
             .axis_iter_mut(Axis(1))
