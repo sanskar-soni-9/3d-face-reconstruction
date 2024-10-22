@@ -13,7 +13,7 @@ pub mod utils;
 pub fn infer(model: &str, image_paths: Vec<String>) {
     // TODO: temporary
     let images = get_ndimages(&image_paths);
-    let mut cnn = CNN::load_with_data(model, images.clone());
+    let mut cnn = CNN::load_with_data(model, images.clone(), Some("0.0"));
     for (i, image) in image_paths.iter().enumerate() {
         let labels = cnn.infer(i);
         let mut new_img = get_image(image);
@@ -51,15 +51,9 @@ pub fn train(model: Option<&str>, data: Dataset, epochs: usize, lr: Option<&str>
         images.push(image);
     }
 
-    let lr: f64 = match lr {
-        Some(lr) => lr.parse().expect("Learning rate should be a valid f64"),
-        None => DEFAULT_LEARNING_RATE,
-    };
-    println!("Training Model with learning rate: {}\n", lr);
-
     let mut cnn = match model {
-        Some(model) => CNN::load_with_data(model, images),
-        None => init_cnn(epochs, images, lr),
+        Some(model) => CNN::load_with_data(model, images, lr),
+        None => init_cnn(epochs, images),
     };
     cnn.train(data.labels);
 }
@@ -94,8 +88,8 @@ pub fn get_ndimages(image_paths: &[String]) -> Vec<Array3<f64>> {
     images
 }
 
-fn init_cnn(epochs: usize, images: Vec<Array3<f64>>, lr: f64) -> cnn::CNN {
-    let mut cnn = cnn::CNN::new(epochs, images, lr);
+fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
+    let mut cnn = cnn::CNN::new(epochs, images, DEFAULT_LEARNING_RATE);
     cnn.add_convolutional_layer(32, 3, 2, true);
 
     cnn.add_mbconv_layer(1, 16, 3, 1, true);

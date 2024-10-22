@@ -42,14 +42,13 @@ impl DenseLayer {
         }
     }
 
-    pub fn forward_propagate(&mut self, input: &Array1<f64>, is_training: bool) -> Array1<f64> {
-        self.input = input.to_owned();
+    pub fn forward_propagate(&mut self, input: Array1<f64>, is_training: bool) -> Array1<f64> {
+        self.input = input;
         self.output = Array1::zeros(self.output_size);
         self.output
-            .iter_mut()
-            .zip(0..self.output_size)
+            .indexed_iter_mut()
             .par_bridge()
-            .for_each(|(val, i)| {
+            .for_each(|(i, val)| {
                 let mut wi = 0.0;
                 for j in 0..self.input.len() {
                     wi += self.weights[[i, j]] * self.input[[j]];
@@ -75,30 +74,26 @@ impl DenseLayer {
     pub fn backward_propagate(&mut self, mut error: Array1<f64>, lr: f64) -> Array1<f64> {
         error *= &self.dropout_mask;
         error
-            .iter_mut()
-            .zip(0..self.output_size)
+            .indexed_iter_mut()
             .par_bridge()
-            .for_each(|(e, i)| *e *= relu_prime(self.output[i]));
+            .for_each(|(i, e)| *e *= relu_prime(self.output[i]));
 
         let mut next_error: Array1<f64> = Array1::zeros(self.input.len());
         next_error
-            .iter_mut()
-            .zip(0..self.input.len())
+            .indexed_iter_mut()
             .par_bridge()
-            .for_each(|(err, x)| {
+            .for_each(|(x, err)| {
                 *err = self.weights.slice(s![.., x]).dot(&error);
             });
 
         self.weights
             .outer_iter_mut()
-            .into_par_iter()
             .zip(0..self.output_size)
+            .par_bridge()
             .for_each(|(mut row, row_i)| {
-                row.iter_mut()
-                    .zip(0..self.input.len())
-                    .for_each(|(col, col_i)| {
-                        *col -= error[[row_i]] * self.input[[col_i]] * lr;
-                    })
+                row.indexed_iter_mut().for_each(|(col_i, col)| {
+                    *col -= error[[row_i]] * self.input[[col_i]] * lr;
+                })
             });
 
         self.biases

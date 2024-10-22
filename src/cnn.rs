@@ -1,4 +1,4 @@
-use crate::config::{EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, TRAINIG_LABELS};
+use crate::config::{DEFAULT_LEARNING_RATE, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, TRAINIG_LABELS};
 use crate::dataset::Labels;
 use layer::{
     convolutional_layer::*, dense_layer::*, depthwise_conv_layer::*, flatten_layer::*,
@@ -198,7 +198,7 @@ impl CNN {
                 );
             }
             println!("Epoch {} complete saving model.\n", e);
-            self.save(EPOCH_MODEL);
+            self.save(&format!("{}{}", EPOCH_MODEL, e));
         }
     }
 
@@ -210,10 +210,10 @@ impl CNN {
                     input = convolutional_layer.forward_propagate(&input, is_training);
                 }
                 LayerType::Dense(dense_layer) => {
-                    flatten_input = dense_layer.forward_propagate(&flatten_input, is_training);
+                    flatten_input = dense_layer.forward_propagate(flatten_input, is_training);
                 }
                 LayerType::DepthwiseConvLayer(depthwise_conv_layer) => {
-                    input = depthwise_conv_layer.forward_propagate(input, is_training);
+                    input = depthwise_conv_layer.forward_propagate(&input, is_training);
                 }
                 LayerType::Flatten(flatten_layer) => {
                     flatten_input = flatten_layer.forward_propagate(&input, is_training);
@@ -283,7 +283,7 @@ impl CNN {
     }
 
     fn save(&self, file_name: &str) {
-        let mut model_file = std::fs::File::create(format!("{}/{}.txt", MODELS_DIR, file_name,))
+        let mut model_file = std::fs::File::create(format!("{}/{}", MODELS_DIR, file_name,))
             .unwrap_or_else(|e| panic!("Error creating model file: {}\nError: {}", file_name, e));
         let json = serde_json::to_string(&self)
             .unwrap_or_else(|e| panic!("Error serializing model: {}\nError: {}", file_name, e));
@@ -302,9 +302,13 @@ impl CNN {
             .unwrap_or_else(|e| panic!("Error deserializing model: {}\nError: {}", model_path, e))
     }
 
-    pub fn load_with_data(model_path: &str, data: Vec<Array3<f64>>) -> CNN {
+    pub fn load_with_data(model_path: &str, data: Vec<Array3<f64>>, lr: Option<&str>) -> CNN {
         let mut cnn = Self::load(model_path);
         cnn.data = data;
+        cnn.lr = match lr {
+            Some(lr) => lr.parse().expect("Learning rate should be a valid f64"),
+            None => DEFAULT_LEARNING_RATE,
+        };
         cnn
     }
 }

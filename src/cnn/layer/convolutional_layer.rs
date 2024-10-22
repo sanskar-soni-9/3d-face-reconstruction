@@ -27,6 +27,10 @@ impl ConvolutionalLayer {
         mut input_shape: (usize, usize, usize),
         padding: bool,
     ) -> Self {
+        if strides == 0 {
+            panic!("Stride should be greater than 0.");
+        }
+
         let mut rng = rand::thread_rng();
         let std_dev = (2.0 / (kernel_size * kernel_size * input_shape.0) as f64).sqrt();
         let normal_distr = Normal::new(0.0, std_dev).unwrap();
@@ -163,8 +167,8 @@ impl ConvolutionalLayer {
         let mut delta_k = Array4::zeros(self.kernel_shape);
         delta_k
             .outer_iter_mut()
-            .into_par_iter()
             .zip(0..self.kernel_shape.0)
+            .par_bridge()
             .for_each(|(mut kernel, kernel_i)| {
                 for row in (0..self.input_shape.1 - self.kernel_shape.2 + 1).step_by(self.strides) {
                     for col in

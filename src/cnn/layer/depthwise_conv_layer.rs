@@ -16,7 +16,7 @@ pub struct DepthwiseConvolutionalLayer {
     output: Array3<f64>,
     #[serde(skip)]
     input: Array3<f64>,
-    padding: (usize, usize), // (right, bottom)
+    padding: (usize, usize, usize, usize), // (left, right, top, bottom)
 }
 
 impl DepthwiseConvolutionalLayer {
@@ -56,9 +56,15 @@ impl DepthwiseConvolutionalLayer {
         }
 
         let padding = if padding {
-            (kernel_size - 1, kernel_size - 1)
+            let padding = (kernel_size - 1) as f64 / 2.0;
+            (
+                padding.floor() as usize,
+                padding.ceil() as usize,
+                padding.floor() as usize,
+                padding.ceil() as usize,
+            )
         } else {
-            (0, 0)
+            (0, 0, 0, 0)
         };
 
         DepthwiseConvolutionalLayer {
@@ -73,15 +79,15 @@ impl DepthwiseConvolutionalLayer {
         }
     }
 
-    pub fn forward_propagate(&mut self, input: Array3<f64>, _is_training: bool) -> Array3<f64> {
+    pub fn forward_propagate(&mut self, input: &Array3<f64>, _is_training: bool) -> Array3<f64> {
         self.input = Array3::zeros(self.input_shape);
         self.input
             .slice_mut(s![
                 ..,
-                ..self.input_shape.1 - self.padding.0,
-                ..self.input_shape.2 - self.padding.1,
+                self.padding.2..self.input_shape.1 - self.padding.3,
+                self.padding.0..self.input_shape.2 - self.padding.1,
             ])
-            .assign(&input);
+            .assign(input);
 
         self.output = Array3::zeros(self.output_shape);
         self.output
@@ -115,9 +121,12 @@ impl DepthwiseConvolutionalLayer {
             .zip(0..self.input_shape.1)
             .par_bridge()
             .for_each(|(mut row, row_i)| {
-                for kernel_row in 0..self.kernel_shape.2 {
+                if row_i < self.padding.2 {
+                    return;
+                }
+                for kernel_row in 0..self.kernel_shape.1 {
                     if kernel_row > row_i
-                        || self.kernel_shape.2 - kernel_row + row_i > self.input_shape.1
+                        || self.kernel_shape.1 - kernel_row + row_i > self.input_shape.1
                         || (row_i - kernel_row) as f64 % self.strides as f64 != 0.0
                     {
                         continue;
@@ -126,7 +135,7 @@ impl DepthwiseConvolutionalLayer {
                     for col_i in
                         (0..self.input_shape.2 - self.kernel_shape.2 + 1).step_by(self.strides)
                     {
-                        for filter in 0..self.input_shape.0 {
+                        for filter in 0..self.kernel_shape.0 {
                             row.slice_mut(s![filter, col_i..col_i + self.kernel_shape.2])
                                 .add_assign(
                                     &(&self.kernels.slice(s![filter, kernel_row, ..])
@@ -141,16 +150,16 @@ impl DepthwiseConvolutionalLayer {
                 }
             });
 
-        if self.padding != (0, 0) {
+        if self.padding != (0, 0, 0, 0) {
             let mut unpadded_next_error: Array3<f64> = Array3::zeros((
                 self.input_shape.0,
-                self.input_shape.1 - self.padding.1,
-                self.input_shape.2 - self.padding.0,
+                self.input_shape.1 - self.padding.2 - self.padding.3,
+                self.input_shape.2 - self.padding.0 - self.padding.1,
             ));
             unpadded_next_error.assign(&next_error.slice(s![
                 ..,
-                ..self.input_shape.1 - self.padding.1,
-                ..self.input_shape.2 - self.padding.0,
+                self.padding.2..self.input_shape.1 - self.padding.3,
+                self.padding.0..self.input_shape.2 - self.padding.1,
             ]));
             next_error = unpadded_next_error;
         }
@@ -158,8 +167,8 @@ impl DepthwiseConvolutionalLayer {
         let mut delta_k = Array3::zeros(self.kernel_shape);
         delta_k
             .outer_iter_mut()
-            .into_par_iter()
             .zip(0..self.kernel_shape.0)
+            .par_bridge()
             .for_each(|(mut kernel, kernel_i)| {
                 for row in (0..self.input_shape.1 - self.kernel_shape.2 + 1).step_by(self.strides) {
                     for col in

@@ -7,7 +7,7 @@ pub struct MaxPoolingLayer {
     input_shape: (usize, usize, usize),
     output_shape: (usize, usize, usize),
     #[serde(skip)]
-    max_indices: Vec<(usize, usize, usize, usize, usize)>,
+    max_indices: Vec<(usize, usize, usize, usize, usize)>, // (channels, output_x, output_y, input_x, input_y)
 }
 
 impl MaxPoolingLayer {
@@ -28,7 +28,7 @@ impl MaxPoolingLayer {
     }
 
     pub fn forward_propagate(&mut self, input: &Array3<f64>, _is_training: bool) -> Array3<f64> {
-        let mut output: Array3<f64> = Array3::<f64>::zeros(self.output_shape);
+        let mut output: Array3<f64> = Array3::zeros(self.output_shape);
         self.max_indices.clear();
         for ((f, y, x), output_val) in output.indexed_iter_mut() {
             let mut max_index = (f, x, y, x, y);

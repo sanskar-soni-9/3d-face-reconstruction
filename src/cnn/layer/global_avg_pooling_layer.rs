@@ -27,8 +27,8 @@ impl GlobalAvgPoolingLayer {
         let mut next_error: Array3<f64> = Array3::zeros(self.input_shape);
         next_error
             .outer_iter_mut()
-            .into_par_iter()
             .zip(0..self.input_shape.0)
+            .par_bridge()
             .for_each(|(mut e, i)| e += error[[i]] * avg_prime);
         next_error
     }
