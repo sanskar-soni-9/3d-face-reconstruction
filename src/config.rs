@@ -4,6 +4,7 @@
 pub const DATASET_INPUT_SIZE: usize = 450; // 450x450
 pub const INPUT_SHAPE: (usize, usize, usize) = (3, 224, 224); // (channles {3: RGB}, height, width)
 pub const DEFAULT_LEARNING_RATE: f64 = 0.002;
+pub const MINI_BATCH_SIZE: usize = 3;
 pub const TRAINIG_LABELS: [&str; 10] = [
     "pt2d",       // 136
     "pts_2d",     // 136

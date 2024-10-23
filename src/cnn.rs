@@ -1,4 +1,6 @@
-use crate::config::{DEFAULT_LEARNING_RATE, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, TRAINIG_LABELS};
+use crate::config::{
+    DEFAULT_LEARNING_RATE, EPOCH_MODEL, INPUT_SHAPE, MINI_BATCH_SIZE, MODELS_DIR, TRAINIG_LABELS,
+};
 use crate::dataset::Labels;
 use activation::Activation;
 use layer::{
@@ -11,6 +13,7 @@ use std::io::{Read, Write};
 
 pub mod activation;
 mod layer;
+mod utils;
 
 #[derive(Serialize, Deserialize)]
 pub struct CNN {
@@ -34,7 +37,7 @@ impl CNN {
     }
 
     pub fn infer(&mut self, img_num: usize) -> Array1<f64> {
-        self.forward_propagate(self.data[img_num].clone(), false)
+        self.forward_propagate(vec![self.data[img_num].clone()], false)[0].to_owned()
     }
 
     pub fn add_activation_layer(&mut self, activation: Activation) {
@@ -257,18 +260,31 @@ impl CNN {
     pub fn train(&mut self, labels: Vec<Labels>) {
         for e in self.cur_epoch..self.epochs {
             self.cur_epoch = e;
-            for (i, labels) in labels.iter().enumerate().take(self.data.len()) {
-                let training_labels = self.prepare_training_labels(labels);
-                let start_time = std::time::SystemTime::now();
+            for i in (0..labels.len())
+                .take(self.data.len())
+                .step_by(MINI_BATCH_SIZE)
+            {
+                let mut input: Vec<Array3<f64>> = vec![];
+                let mut training_labels: Vec<Array1<f64>> = vec![];
+                let mut error: Vec<Array1<f64>> = vec![];
+                for j in 0..MINI_BATCH_SIZE.min(labels.len() - i) {
+                    input.push(self.data[i + j].clone());
+                    training_labels.push(self.prepare_training_labels(&labels[i]));
+                }
 
-                let prediction = self.forward_propagate(self.data[i].clone(), true);
+                let start_time = std::time::SystemTime::now();
+                let prediction = self.forward_propagate(input, true);
                 let forward_time = std::time::SystemTime::now();
                 println!(
                     "\nFORWARD TOOK: {:?}\n",
                     forward_time.duration_since(start_time)
                 );
 
-                let error = &prediction - &training_labels;
+                prediction
+                    .iter()
+                    .zip(&training_labels)
+                    .for_each(|(pred, train_label)| error.push(pred - train_label));
+
                 println!(
                     "PREDICTION: {:?}\n\nEXPECTED: {:?}\n\nERROR: {:?}\n\n",
                     prediction, training_labels, error
@@ -287,8 +303,15 @@ impl CNN {
         }
     }
 
-    fn forward_propagate(&mut self, mut input: Array3<f64>, is_training: bool) -> Array1<f64> {
-        let mut flatten_input = Array1::zeros(0);
+    fn forward_propagate(
+        &mut self,
+        mut input: Vec<Array3<f64>>,
+        is_training: bool,
+    ) -> Vec<Array1<f64>> {
+        let mut flatten_input: Vec<Array1<f64>> = vec![];
+        input
+            .iter()
+            .for_each(|_| flatten_input.push(Array1::zeros(0)));
         for layer in self.layers.iter_mut() {
             match layer {
                 LayerType::Activation(activation_layer) => {
@@ -322,8 +345,11 @@ impl CNN {
         flatten_input
     }
 
-    fn backward_propagate(&mut self, mut error: Array1<f64>) {
-        let mut shaped_error = Array3::zeros((0, 0, 0));
+    fn backward_propagate(&mut self, mut error: Vec<Array1<f64>>) {
+        let mut shaped_error: Vec<Array3<f64>> = vec![];
+        error
+            .iter()
+            .for_each(|_| shaped_error.push(Array3::zeros((0, 0, 0))));
         for layer in self.layers.iter_mut().rev() {
             match layer {
                 LayerType::Activation(activation_layer) => {
