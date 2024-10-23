@@ -243,7 +243,7 @@ impl CNN {
                 LayerType::GlobalAvgPooling(layer) => layer.output_size(),
                 _ => panic!("Add dense layer after a flatten, global average or dense layer."),
             },
-            None => self.data[0].len(),
+            None => panic!("Add dense layer after a flatten, global average or dense layer."),
         };
 
         self.add_layer(LayerType::Dense(DenseLayer::new(
