@@ -8,15 +8,14 @@ use rayon::prelude::*;
 pub struct DenseLayer {
     weights: Array2<f64>,
     biases: Array1<f64>,
+    input_size: usize,
     output_size: usize,
-    dropout_rate: f64,
     #[serde(skip)]
     input: Vec<Array1<f64>>,
-    input_size: usize,
 }
 
 impl DenseLayer {
-    pub fn new(input_size: usize, output_size: usize, dropout_rate: f64, bias: f64) -> Self {
+    pub fn new(input_size: usize, output_size: usize, bias: f64) -> Self {
         let limit = (3.0 * (DENSE_WEIGHT_SCALE / input_size as f64)).sqrt();
         let normal_distr = Uniform::new(-limit, limit);
         let mut rng = rand::thread_rng();
@@ -31,7 +30,6 @@ impl DenseLayer {
             weights,
             biases,
             output_size,
-            dropout_rate,
             input: vec![],
             input_size,
         }

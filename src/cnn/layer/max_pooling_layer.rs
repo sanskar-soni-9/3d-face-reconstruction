@@ -1,6 +1,8 @@
 use ndarray::Array3;
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefMutIterator, ParallelIterator};
 
+type MaxIndices = Vec<(usize, usize, usize, usize, usize)>; // (channels, output_x, output_y, input_x, input_y)
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct MaxPoolingLayer {
     kernel_size: usize,
@@ -8,7 +10,7 @@ pub struct MaxPoolingLayer {
     input_shape: (usize, usize, usize),
     output_shape: (usize, usize, usize),
     #[serde(skip)]
-    max_indices: Vec<Vec<(usize, usize, usize, usize, usize)>>, // (channels, output_x, output_y, input_x, input_y)
+    max_indices: Vec<MaxIndices>,
 }
 
 impl MaxPoolingLayer {
@@ -30,7 +32,7 @@ impl MaxPoolingLayer {
 
     pub fn forward_propagate(
         &mut self,
-        input: &Vec<Array3<f64>>,
+        input: &[Array3<f64>],
         _is_training: bool,
     ) -> Vec<Array3<f64>> {
         self.max_indices.clear();

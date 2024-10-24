@@ -12,7 +12,7 @@ impl FlattenLayer {
 
     pub fn forward_propagate(
         &mut self,
-        input: &Vec<Array3<f64>>,
+        input: &[Array3<f64>],
         _is_training: bool,
     ) -> Vec<Array1<f64>> {
         let mut output: Vec<Array1<f64>> = vec![];
@@ -22,7 +22,7 @@ impl FlattenLayer {
         output
     }
 
-    pub fn backward_propagate(&self, error: &Vec<Array1<f64>>) -> Vec<Array3<f64>> {
+    pub fn backward_propagate(&self, error: &[Array1<f64>]) -> Vec<Array3<f64>> {
         let mut next_error: Vec<Array3<f64>> = vec![];
         error.iter().for_each(|err| {
             next_error.push(

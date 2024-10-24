@@ -228,7 +228,7 @@ impl CNN {
         self.add_layer(LayerType::Flatten(FlattenLayer::new(input_shape)));
     }
 
-    pub fn add_dense_layer(&mut self, neurons: usize, bias: f64, dropout_rate: f64) {
+    pub fn add_dense_layer(&mut self, neurons: usize, bias: f64) {
         let input_size = match self.layers.last() {
             Some(layer) => match layer {
                 LayerType::Activation(layer) => {
@@ -249,27 +249,21 @@ impl CNN {
             None => panic!("Add dense layer after a flatten, global average or dense layer."),
         };
 
-        self.add_layer(LayerType::Dense(DenseLayer::new(
-            input_size,
-            neurons,
-            bias,
-            dropout_rate,
-        )));
+        self.add_layer(LayerType::Dense(DenseLayer::new(input_size, neurons, bias)));
     }
 
     pub fn train(&mut self, labels: Vec<Labels>) {
         for e in self.cur_epoch..self.epochs {
             self.cur_epoch = e;
-            for i in (0..labels.len())
+            for batch in (0..labels.len())
                 .take(self.data.len())
                 .step_by(MINI_BATCH_SIZE)
             {
                 let mut input: Vec<Array3<f64>> = vec![];
                 let mut training_labels: Vec<Array1<f64>> = vec![];
-                let mut error: Vec<Array1<f64>> = vec![];
-                for j in 0..MINI_BATCH_SIZE.min(labels.len() - i) {
-                    input.push(self.data[i + j].clone());
-                    training_labels.push(self.prepare_training_labels(&labels[i]));
+                for j in 0..MINI_BATCH_SIZE.min(self.data.len() - batch) {
+                    input.push(self.data[batch + j].clone());
+                    training_labels.push(self.prepare_training_labels(&labels[batch]));
                 }
 
                 let start_time = std::time::SystemTime::now();
@@ -280,6 +274,7 @@ impl CNN {
                     forward_time.duration_since(start_time)
                 );
 
+                let mut error: Vec<Array1<f64>> = vec![];
                 prediction
                     .iter()
                     .zip(&training_labels)
@@ -309,9 +304,7 @@ impl CNN {
         is_training: bool,
     ) -> Vec<Array1<f64>> {
         let mut flatten_input: Vec<Array1<f64>> = vec![];
-        input
-            .iter()
-            .for_each(|_| flatten_input.push(Array1::zeros(0)));
+
         for layer in self.layers.iter_mut() {
             match layer {
                 LayerType::Activation(activation_layer) => {
@@ -347,9 +340,7 @@ impl CNN {
 
     fn backward_propagate(&mut self, mut error: Vec<Array1<f64>>) {
         let mut shaped_error: Vec<Array3<f64>> = vec![];
-        error
-            .iter()
-            .for_each(|_| shaped_error.push(Array3::zeros((0, 0, 0))));
+
         for layer in self.layers.iter_mut().rev() {
             match layer {
                 LayerType::Activation(activation_layer) => {

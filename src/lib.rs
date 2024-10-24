@@ -119,7 +119,7 @@ fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
     cnn.add_convolutional_layer(1280, 1, 1, true);
     cnn.add_activation_layer(Activation::SiLU);
     cnn.add_global_avg_pooling_layer();
-    cnn.add_dense_layer(CNN_OUTPUT_SIZE, 0.0, 0.0);
+    cnn.add_dense_layer(CNN_OUTPUT_SIZE, 0.0);
     cnn.add_activation_layer(Activation::SiLU);
     cnn
 }
