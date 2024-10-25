@@ -5,8 +5,7 @@ use rayon::prelude::*;
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ActivationLayer {
     #[serde(skip)]
-    input: Vec<Array1<f64>>,
-    #[serde(skip)]
+    input: Array1<f64>,
     input_shape: Vec<usize>,
     activation: Activation,
 }
@@ -16,37 +15,27 @@ impl ActivationLayer {
         ActivationLayer {
             activation,
             input_shape,
-            input: vec![],
+            input: Array1::zeros(0),
         }
     }
 
     pub fn forward_propagate<D>(
         &mut self,
-        input: &Vec<Array<f64, D>>,
+        input: &Array<f64, D>,
         _is_training: bool,
-    ) -> Vec<Array<f64, D>>
+    ) -> Array<f64, D>
     where
         D: Dimension,
     {
-        self.input.clear();
-        input.iter().for_each(|inp| {
-            self.input
-                .push(inp.flatten_with_order(Order::RowMajor).to_owned())
-        });
-        let mut input = input.to_owned();
-        input.par_iter_mut().for_each(|inp_arr| {
-            inp_arr
-                .par_iter_mut()
-                .for_each(|inp| *inp = self.activation.activate(*inp))
-        });
-        input
+        self.input = input.flatten_with_order(Order::RowMajor).to_owned();
+        let mut output = input.to_owned();
+        output
+            .par_iter_mut()
+            .for_each(|inp| *inp = self.activation.activate(*inp));
+        output
     }
 
-    pub fn backward_propagate<D>(
-        &self,
-        mut error: Vec<Array<f64, D>>,
-        _lr: f64,
-    ) -> Vec<Array<f64, D>>
+    pub fn backward_propagate<D>(&self, mut error: Array<f64, D>, _lr: f64) -> Array<f64, D>
     where
         D: Dimension,
     {
@@ -54,13 +43,7 @@ impl ActivationLayer {
             .iter_mut()
             .zip(&self.input)
             .par_bridge()
-            .for_each(|(err_arr, inp_arr)| {
-                err_arr
-                    .iter_mut()
-                    .zip(inp_arr)
-                    .par_bridge()
-                    .for_each(|(err, inp)| *err *= self.activation.deactivate(*inp))
-            });
+            .for_each(|(err, inp)| *err = self.activation.deactivate(*inp));
         error
     }
 

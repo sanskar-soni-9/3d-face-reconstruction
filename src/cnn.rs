@@ -1,13 +1,11 @@
-use crate::config::{
-    DEFAULT_LEARNING_RATE, EPOCH_MODEL, INPUT_SHAPE, MINI_BATCH_SIZE, MODELS_DIR, TRAINIG_LABELS,
-};
+use crate::config::{DEFAULT_LEARNING_RATE, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, TRAINIG_LABELS};
 use crate::dataset::Labels;
 use activation::Activation;
 use layer::{
     activation_layer::*, convolutional_layer::*, dense_layer::*, depthwise_conv_layer::*,
     flatten_layer::*, global_avg_pooling_layer::*, max_pooling_layer::*, LayerType,
 };
-use ndarray::{Array1, Array3};
+use ndarray::{s, Array1, Array2, Array3, Array4};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
@@ -17,6 +15,7 @@ mod utils;
 
 #[derive(Serialize, Deserialize)]
 pub struct CNN {
+    mini_batch_size: usize,
     layers: Vec<LayerType>,
     epochs: usize,
     cur_epoch: usize,
@@ -26,8 +25,9 @@ pub struct CNN {
 }
 
 impl CNN {
-    pub fn new(epochs: usize, inputs: Vec<Array3<f64>>, lr: f64) -> Self {
+    pub fn new(mini_batch_size: usize, epochs: usize, inputs: Vec<Array3<f64>>, lr: f64) -> Self {
         CNN {
+            mini_batch_size,
             layers: vec![],
             epochs,
             cur_epoch: 0,
@@ -37,7 +37,14 @@ impl CNN {
     }
 
     pub fn infer(&mut self, img_num: usize) -> Array1<f64> {
-        self.forward_propagate(vec![self.data[img_num].clone()], false)[0].to_owned()
+        let img_shape = self.data[img_num].shape();
+        let mut input: Array4<f64> = Array4::zeros((1, img_shape[0], img_shape[1], img_shape[2]));
+        input
+            .slice_mut(s![0, .., .., ..])
+            .assign(&self.data[img_num]);
+        self.forward_propagate(input, false)
+            .slice(s![0, ..])
+            .to_owned()
     }
 
     pub fn add_activation_layer(&mut self, activation: Activation) {
@@ -46,18 +53,18 @@ impl CNN {
                 LayerType::Activation(layer) => layer.input_shape().to_owned(),
                 LayerType::Convolutional(layer) => {
                     let shape = layer.output_shape();
-                    vec![shape.0, shape.1, shape.2]
+                    vec![shape.0, shape.1, shape.2, shape.3]
                 }
                 LayerType::Dense(layer) => vec![layer.output_size()],
                 LayerType::DepthwiseConvLayer(layer) => {
                     let shape = layer.output_shape();
-                    vec![shape.0, shape.1, shape.2]
+                    vec![shape.0, shape.1, shape.2, shape.3]
                 }
                 LayerType::Flatten(layer) => vec![layer.output_size()],
                 LayerType::GlobalAvgPooling(layer) => vec![layer.output_size()],
                 LayerType::MaxPooling(layer) => {
                     let shape = layer.output_shape();
-                    vec![shape.0, shape.1, shape.2]
+                    vec![shape.0, shape.1, shape.2, shape.3]
                 }
             },
             None => panic!("Activation Layer can not be the first layer."),
@@ -82,8 +89,8 @@ impl CNN {
             Some(layer) => match layer {
                 LayerType::Activation(layer) => {
                     let shape = layer.input_shape();
-                    if shape.len() == 3 {
-                        (shape[0], shape[1], shape[2])
+                    if shape.len() == 4 {
+                        (shape[0], shape[1], shape[2], shape[3])
                     } else {
                         panic!(
                             "Add convolutional layer after a convolutional or max pooling layer."
@@ -94,7 +101,12 @@ impl CNN {
                 LayerType::MaxPooling(layer) => layer.output_shape(),
                 _ => panic!("Add convolutional layer after a convolutional or max pooling layer."),
             },
-            None => INPUT_SHAPE,
+            None => (
+                self.mini_batch_size,
+                INPUT_SHAPE.0,
+                INPUT_SHAPE.1,
+                INPUT_SHAPE.2,
+            ),
         };
 
         self.add_layer(LayerType::Convolutional(ConvolutionalLayer::new(
@@ -121,10 +133,9 @@ impl CNN {
             Some(layer) => match layer {
                 LayerType::Activation(layer) => {
                     let shape = layer.input_shape();
-                    if shape.len() == 3 {
-                        (shape[0], shape[1], shape[2])
+                    if shape.len() == 4 {
+                        (shape[0], shape[1], shape[2], shape[3])
                     } else {
-                        println!("SHAPE: {:?}", shape);
                         panic!("Add mbconv layer after a convolutional or max pool layer.");
                     }
                 }
@@ -132,7 +143,12 @@ impl CNN {
                 LayerType::MaxPooling(layer) => layer.output_shape(),
                 _ => panic!("Add mbconv layer after a convolutional or max pool layer."),
             },
-            None => INPUT_SHAPE,
+            None => (
+                self.mini_batch_size,
+                INPUT_SHAPE.0,
+                INPUT_SHAPE.1,
+                INPUT_SHAPE.2,
+            ),
         };
 
         let layer1 =
@@ -157,8 +173,8 @@ impl CNN {
             Some(layer) => match layer {
                 LayerType::Activation(layer) => {
                     let shape = layer.input_shape();
-                    if shape.len() == 3 {
-                        (shape[0], shape[1], shape[2])
+                    if shape.len() == 4 {
+                        (shape[0], shape[1], shape[2], shape[3])
                     } else {
                         panic!(
                             "Add global average pooling layer after a convolutional or pooling layer."
@@ -188,8 +204,8 @@ impl CNN {
             Some(layer) => match layer {
                 LayerType::Activation(layer) => {
                     let shape = layer.input_shape();
-                    if shape.len() == 3 {
-                        (shape[0], shape[1], shape[2])
+                    if shape.len() == 4 {
+                        (shape[0], shape[1], shape[2], shape[3])
                     } else {
                         panic!("Add max pooling layer after a convolutional or max pooling layer.");
                     }
@@ -213,8 +229,8 @@ impl CNN {
             Some(layer) => match layer {
                 LayerType::Activation(layer) => {
                     let shape = layer.input_shape();
-                    if shape.len() == 3 {
-                        (shape[0], shape[1], shape[2])
+                    if shape.len() == 4 {
+                        (shape[0], shape[1], shape[2], shape[3])
                     } else {
                         panic!("Add flatten layer after a convolutional or max pooling layer.");
                     }
@@ -233,8 +249,8 @@ impl CNN {
             Some(layer) => match layer {
                 LayerType::Activation(layer) => {
                     let shape = layer.input_shape();
-                    if shape.len() == 1 {
-                        shape[0]
+                    if shape.len() == 2 {
+                        shape[1]
                     } else {
                         panic!("Add dense layer after a flatten, global average or dense layer.");
                     }
@@ -257,12 +273,23 @@ impl CNN {
             self.cur_epoch = e;
             for batch in (0..labels.len())
                 .take(self.data.len())
-                .step_by(MINI_BATCH_SIZE)
+                .step_by(self.mini_batch_size)
             {
-                let mut input: Vec<Array3<f64>> = vec![];
+                if batch + self.mini_batch_size >= self.data.len() {
+                    break;
+                }
+
+                let mut input: Array4<f64> = Array4::zeros((
+                    self.mini_batch_size,
+                    INPUT_SHAPE.0,
+                    INPUT_SHAPE.1,
+                    INPUT_SHAPE.2,
+                ));
                 let mut training_labels: Vec<Array1<f64>> = vec![];
-                for j in 0..MINI_BATCH_SIZE.min(self.data.len() - batch) {
-                    input.push(self.data[batch + j].clone());
+                for j in 0..self.mini_batch_size {
+                    input
+                        .slice_mut(s![j, .., .., ..])
+                        .assign(&self.data[batch + j]);
                     training_labels.push(self.prepare_training_labels(&labels[batch]));
                 }
 
@@ -274,11 +301,13 @@ impl CNN {
                     forward_time.duration_since(start_time)
                 );
 
-                let mut error: Vec<Array1<f64>> = vec![];
-                prediction
-                    .iter()
-                    .zip(&training_labels)
-                    .for_each(|(pred, train_label)| error.push(pred - train_label));
+                let mut error: Array2<f64> = Array2::zeros(prediction.raw_dim());
+                error
+                    .outer_iter_mut()
+                    .enumerate()
+                    .for_each(|(idx, mut err)| {
+                        err.assign(&(&prediction.slice(s![idx, ..]) - &training_labels[idx]));
+                    });
 
                 println!(
                     "PREDICTION: {:?}\n\nEXPECTED: {:?}\n\nERROR: {:?}\n\n",
@@ -298,12 +327,9 @@ impl CNN {
         }
     }
 
-    fn forward_propagate(
-        &mut self,
-        mut input: Vec<Array3<f64>>,
-        is_training: bool,
-    ) -> Vec<Array1<f64>> {
-        let mut flatten_input: Vec<Array1<f64>> = vec![];
+    fn forward_propagate(&mut self, mut input: Array4<f64>, is_training: bool) -> Array2<f64> {
+        self.store.clear();
+        let mut flatten_input: Array2<f64> = Array2::zeros((0, 0));
 
         for layer in self.layers.iter_mut() {
             match layer {
@@ -316,13 +342,13 @@ impl CNN {
                     }
                 }
                 LayerType::Convolutional(convolutional_layer) => {
-                    input = convolutional_layer.forward_propagate(&input, is_training);
+                    input = convolutional_layer.forward_propagate(input, is_training);
                 }
                 LayerType::Dense(dense_layer) => {
                     flatten_input = dense_layer.forward_propagate(flatten_input, is_training);
                 }
                 LayerType::DepthwiseConvLayer(depthwise_conv_layer) => {
-                    input = depthwise_conv_layer.forward_propagate(&input, is_training);
+                    input = depthwise_conv_layer.forward_propagate(input, is_training);
                 }
                 LayerType::Flatten(flatten_layer) => {
                     flatten_input = flatten_layer.forward_propagate(&input, is_training);
@@ -338,8 +364,8 @@ impl CNN {
         flatten_input
     }
 
-    fn backward_propagate(&mut self, mut error: Vec<Array1<f64>>) {
-        let mut shaped_error: Vec<Array3<f64>> = vec![];
+    fn backward_propagate(&mut self, mut error: Array2<f64>) {
+        let mut shaped_error: Array4<f64> = Array4::zeros((0, 0, 0, 0));
 
         for layer in self.layers.iter_mut().rev() {
             match layer {

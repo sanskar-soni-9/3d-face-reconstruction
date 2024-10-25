@@ -1,5 +1,5 @@
-use crate::{cnn::utils::batch_mean, config::DENSE_WEIGHT_SCALE};
-use ndarray::{s, Array1, Array2};
+use crate::config::DENSE_WEIGHT_SCALE;
+use ndarray::{s, Array1, Array2, Array3, Axis};
 use rand::Rng;
 use rand_distr::Uniform;
 use rayon::prelude::*;
@@ -11,7 +11,7 @@ pub struct DenseLayer {
     input_size: usize,
     output_size: usize,
     #[serde(skip)]
-    input: Vec<Array1<f64>>,
+    input: Array2<f64>,
 }
 
 impl DenseLayer {
@@ -30,52 +30,21 @@ impl DenseLayer {
             weights,
             biases,
             output_size,
-            input: vec![],
+            input: Array2::zeros((0, 0)),
             input_size,
         }
     }
 
-    pub fn forward_propagate(
-        &mut self,
-        input: Vec<Array1<f64>>,
-        _is_training: bool,
-    ) -> Vec<Array1<f64>> {
+    pub fn forward_propagate(&mut self, input: Array2<f64>, _is_training: bool) -> Array2<f64> {
         self.input = input;
-        let mut output: Vec<Array1<f64>> = vec![];
-        self.input
-            .iter()
-            .for_each(|_| output.push(Array1::zeros(self.output_size)));
-
-        output
-            .par_iter_mut()
-            .zip(&self.input)
-            .for_each(|(output_arr, input_arr)| self.calculate_output(input_arr, output_arr));
-
-        output
+        self.calculate_output(&self.input)
     }
 
-    pub fn backward_propagate(&mut self, error: Vec<Array1<f64>>, lr: f64) -> Vec<Array1<f64>> {
-        let mut next_error: Vec<Array1<f64>> = vec![];
-        let mut weight_grads: Vec<Array2<f64>> = vec![];
-        error.iter().for_each(|_| {
-            next_error.push(Array1::zeros(self.input_size));
-            weight_grads.push(Array2::zeros(self.weights.raw_dim()));
-        });
+    pub fn backward_propagate(&mut self, error: Array2<f64>, lr: f64) -> Array2<f64> {
+        let next_error = self.calculate_next_err(&error);
 
-        next_error
-            .par_iter_mut()
-            .zip(&error)
-            .for_each(|(next_err, err)| self.calculate_next_err(err, next_err));
-
-        weight_grads
-            .par_iter_mut()
-            .zip(0..error.len())
-            .for_each(|(wg, wg_i)| self.calculate_delta_w(&error[wg_i], &self.input[wg_i], wg));
-
-        self.weights -= &(batch_mean(&weight_grads) * lr);
-
-        self.biases -= &(batch_mean(&error) * lr);
-
+        self.weights -= &(self.calculate_delta_w(&error) * lr);
+        self.biases -= &(error.mean_axis(Axis(0)).unwrap() * lr);
         next_error
     }
 
@@ -83,34 +52,61 @@ impl DenseLayer {
         self.output_size
     }
 
-    fn calculate_output(&self, input: &Array1<f64>, output: &mut Array1<f64>) {
-        output.indexed_iter_mut().par_bridge().for_each(|(i, val)| {
-            let mut wi = 0.0;
-            for j in 0..self.input_size {
-                wi += self.weights[[i, j]] * input[[j]];
-            }
-            *val = wi + self.biases[[i]];
-        });
-    }
-
-    fn calculate_next_err(&self, err: &Array1<f64>, next_err: &mut Array1<f64>) {
-        next_err
-            .indexed_iter_mut()
-            .par_bridge()
-            .for_each(|(x, n_err)| {
-                *n_err = self.weights.slice(s![.., x]).dot(err);
-            });
-    }
-
-    fn calculate_delta_w(&self, err: &Array1<f64>, inp: &Array1<f64>, delta_w: &mut Array2<f64>) {
-        delta_w
+    fn calculate_output(&self, input: &Array2<f64>) -> Array2<f64> {
+        let mut output = Array2::zeros((input.shape()[0], self.output_size));
+        output
             .outer_iter_mut()
-            .zip(0..self.output_size)
+            .enumerate()
             .par_bridge()
-            .for_each(|(mut row, row_i)| {
-                row.indexed_iter_mut().for_each(|(col_i, col)| {
-                    *col = err[[row_i]] * inp[[col_i]];
-                })
+            .for_each(|(op_i, mut op)| {
+                op.indexed_iter_mut().par_bridge().for_each(|(i, val)| {
+                    let mut wi = 0.0;
+                    for j in 0..self.input_size {
+                        wi += self.weights[[i, j]] * input[[op_i, j]];
+                    }
+                    *val = wi + self.biases[[i]];
+                });
             });
+        output
+    }
+
+    fn calculate_next_err(&self, err: &Array2<f64>) -> Array2<f64> {
+        let mut next_error: Array2<f64> = Array2::zeros(self.input.raw_dim());
+        next_error
+            .outer_iter_mut()
+            .zip(err.outer_iter())
+            .par_bridge()
+            .for_each(|(mut n_err, err)| {
+                n_err
+                    .indexed_iter_mut()
+                    .par_bridge()
+                    .for_each(|(x, n_err)| {
+                        *n_err = self.weights.slice(s![.., x]).dot(&err);
+                    });
+            });
+        next_error
+    }
+
+    fn calculate_delta_w(&self, err: &Array2<f64>) -> Array2<f64> {
+        let mut weight_grads: Array3<f64> =
+            Array3::zeros((self.input.shape()[0], self.output_size, self.input_size));
+
+        weight_grads
+            .outer_iter_mut()
+            .enumerate()
+            .par_bridge()
+            .for_each(|(wei_i, mut wei_grd)| {
+                wei_grd
+                    .outer_iter_mut()
+                    .zip(0..self.output_size)
+                    .par_bridge()
+                    .for_each(|(mut row, row_i)| {
+                        row.indexed_iter_mut().for_each(|(col_i, col)| {
+                            *col = err[[wei_i, row_i]] * self.input[[wei_i, col_i]];
+                        })
+                    });
+            });
+
+        weight_grads.mean_axis(Axis(0)).unwrap()
     }
 }

@@ -1,67 +1,60 @@
-use ndarray::{s, Array1, Array3};
+use ndarray::{s, Array2, Array4};
 use rayon::prelude::*;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct GlobalAvgPoolingLayer {
-    input_shape: (usize, usize, usize),
+    input_shape: (usize, usize, usize, usize),
 }
 
 impl GlobalAvgPoolingLayer {
-    pub fn new(input_shape: (usize, usize, usize)) -> Self {
+    pub fn new(input_shape: (usize, usize, usize, usize)) -> Self {
         GlobalAvgPoolingLayer { input_shape }
     }
 
-    pub fn forward_propagate(
-        &mut self,
-        input: &Vec<Array3<f64>>,
-        _is_training: bool,
-    ) -> Vec<Array1<f64>> {
-        let mut output: Vec<Array1<f64>> = vec![];
-        input
-            .iter()
-            .for_each(|_| output.push(Array1::zeros(self.input_shape.0)));
-
-        output
-            .par_iter_mut()
-            .zip(input)
-            .for_each(|(output_arr, input_arr)| self.calculate_output(input_arr, output_arr));
-
-        output
+    pub fn forward_propagate(&mut self, input: &Array4<f64>, _is_training: bool) -> Array2<f64> {
+        self.calculate_output(input)
     }
 
-    pub fn backward_propagate(&self, error: &Vec<Array1<f64>>) -> Vec<Array3<f64>> {
-        let avg_prime = 1.0 / (self.input_shape.1 * self.input_shape.2) as f64;
-        let mut next_error: Vec<Array3<f64>> = vec![];
-        error
-            .iter()
-            .for_each(|_| next_error.push(Array3::zeros(self.input_shape)));
-
-        next_error
-            .par_iter_mut()
-            .zip(error)
-            .for_each(|(next_err, err)| self.calculate_next_err(err, avg_prime, next_err));
-
-        next_error
+    pub fn backward_propagate(&self, error: &Array2<f64>) -> Array4<f64> {
+        self.calculate_next_err(error)
     }
 
     pub fn output_size(&self) -> usize {
-        self.input_shape.0
+        self.input_shape.1
     }
 
-    fn calculate_output(&self, input: &Array3<f64>, output: &mut Array1<f64>) {
-        output.indexed_iter_mut().par_bridge().for_each(|(i, out)| {
-            *out = input
-                .slice(s![i, .., ..])
-                .mean()
-                .expect("Average array is empty?")
-        });
-    }
-
-    fn calculate_next_err(&self, err: &Array1<f64>, avg_prime: f64, next_err: &mut Array3<f64>) {
-        next_err
+    fn calculate_output(&self, input: &Array4<f64>) -> Array2<f64> {
+        let mut output: Array2<f64> = Array2::zeros((self.input_shape.0, self.input_shape.1));
+        output
             .outer_iter_mut()
-            .zip(0..self.input_shape.0)
+            .enumerate()
             .par_bridge()
-            .for_each(|(mut e, i)| e += err[[i]] * avg_prime);
+            .for_each(|(idx, mut op)| {
+                op.indexed_iter_mut().par_bridge().for_each(|(i, out)| {
+                    *out = input
+                        .slice(s![idx, i, .., ..])
+                        .mean()
+                        .expect("Average array is empty?")
+                });
+            });
+        output
+    }
+
+    fn calculate_next_err(&self, err: &Array2<f64>) -> Array4<f64> {
+        let avg_prime = 1.0 / (self.input_shape.2 * self.input_shape.3) as f64;
+        let mut next_error: Array4<f64> = Array4::zeros(self.input_shape);
+        next_error
+            .outer_iter_mut()
+            .enumerate()
+            .par_bridge()
+            .for_each(|(idx, mut n_err)| {
+                n_err
+                    .outer_iter_mut()
+                    .zip(0..self.input_shape.0)
+                    .par_bridge()
+                    .for_each(|(mut e, i)| e += err[[idx, i]] * avg_prime);
+            });
+
+        next_error
     }
 }

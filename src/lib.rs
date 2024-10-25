@@ -1,5 +1,5 @@
 use cnn::{activation::Activation, CNN};
-use config::{CNN_OUTPUT_SIZE, DEFAULT_LEARNING_RATE, INPUT_SHAPE, OUTPUT_DIR};
+use config::{CNN_OUTPUT_SIZE, DEFAULT_LEARNING_RATE, INPUT_SHAPE, MINI_BATCH_SIZE, OUTPUT_DIR};
 use dataset::Dataset;
 use image::{imageops::FilterType, DynamicImage, GenericImage, GenericImageView, Rgba};
 use ndarray::Array3;
@@ -89,7 +89,7 @@ pub fn get_ndimages(image_paths: &[String]) -> Vec<Array3<f64>> {
 }
 
 fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
-    let mut cnn = cnn::CNN::new(epochs, images, DEFAULT_LEARNING_RATE);
+    let mut cnn = cnn::CNN::new(MINI_BATCH_SIZE, epochs, images, DEFAULT_LEARNING_RATE);
     cnn.add_convolutional_layer(32, 3, 2, true);
     cnn.add_activation_layer(Activation::SiLU);
 
