@@ -5,18 +5,18 @@ use rand_distr::Normal;
 use rayon::prelude::*;
 use std::ops::AddAssign;
 
-type Shape4D = (usize, usize, usize, usize);
+type Tensor4DShape = (usize, usize, usize, usize);
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct ConvolutionalLayer {
-    kernel_shape: Shape4D,
+    kernel_shape: Tensor4DShape,
     strides: usize,
-    input_shape: Shape4D,
-    output_shape: Shape4D, // (batch, filters, height, width)
+    input_shape: Tensor4DShape,
+    output_shape: Tensor4DShape, // (batch, filters, height, width)
     kernels: Array4<f64>,
     #[serde(skip)]
     input: Array4<f64>,
-    padding: Shape4D, // (left, right, top, bottom)
+    padding: Tensor4DShape, // (left, right, top, bottom)
 }
 
 impl ConvolutionalLayer {
@@ -24,7 +24,7 @@ impl ConvolutionalLayer {
         filters: usize,
         kernel_size: usize,
         strides: usize,
-        mut input_shape: Shape4D,
+        mut input_shape: Tensor4DShape,
         padding: bool,
     ) -> Self {
         if strides == 0 {
@@ -84,7 +84,7 @@ impl ConvolutionalLayer {
 
     pub fn forward_propagate(&mut self, input: Array4<f64>, _is_training: bool) -> Array4<f64> {
         self.input = self.prepare(input);
-        self.calculate_output()
+        self.calculate_output(&self.input)
     }
 
     pub fn backward_propagate(&mut self, error: Array4<f64>, lr: f64) -> Array4<f64> {
@@ -92,7 +92,7 @@ impl ConvolutionalLayer {
         self.calculate_next_err(&error)
     }
 
-    pub fn output_shape(&self) -> Shape4D {
+    pub fn output_shape(&self) -> Tensor4DShape {
         self.output_shape
     }
 
@@ -113,11 +113,11 @@ impl ConvolutionalLayer {
         padded_input
     }
 
-    fn calculate_output(&self) -> Array4<f64> {
+    fn calculate_output(&self, input: &Array4<f64>) -> Array4<f64> {
         let mut output: Array4<f64> = Array4::zeros(self.output_shape);
         output
             .outer_iter_mut()
-            .zip(self.input.outer_iter())
+            .zip(input.outer_iter())
             .par_bridge()
             .for_each(|(mut op, inp)| {
                 let mut indexed_output_iter: Vec<((usize, usize, usize), &mut f64)> =

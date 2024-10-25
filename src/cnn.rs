@@ -11,7 +11,6 @@ use std::io::{Read, Write};
 
 pub mod activation;
 mod layer;
-mod utils;
 
 #[derive(Serialize, Deserialize)]
 pub struct CNN {
@@ -55,13 +54,19 @@ impl CNN {
                     let shape = layer.output_shape();
                     vec![shape.0, shape.1, shape.2, shape.3]
                 }
-                LayerType::Dense(layer) => vec![layer.output_size()],
+                LayerType::Dense(layer) => {
+                    let shape = layer.output_shape();
+                    vec![shape.0, shape.1]
+                }
                 LayerType::DepthwiseConvLayer(layer) => {
                     let shape = layer.output_shape();
                     vec![shape.0, shape.1, shape.2, shape.3]
                 }
                 LayerType::Flatten(layer) => vec![layer.output_size()],
-                LayerType::GlobalAvgPooling(layer) => vec![layer.output_size()],
+                LayerType::GlobalAvgPooling(layer) => {
+                    let shape = layer.output_shape();
+                    vec![shape.0, shape.1]
+                }
                 LayerType::MaxPooling(layer) => {
                     let shape = layer.output_shape();
                     vec![shape.0, shape.1, shape.2, shape.3]
@@ -245,27 +250,33 @@ impl CNN {
     }
 
     pub fn add_dense_layer(&mut self, neurons: usize, bias: f64) {
-        let input_size = match self.layers.last() {
+        let input_shape = match self.layers.last() {
             Some(layer) => match layer {
                 LayerType::Activation(layer) => {
                     let shape = layer.input_shape();
                     if shape.len() == 2 {
-                        shape[1]
+                        (shape[0], shape[1])
                     } else {
                         panic!("Add dense layer after a flatten, global average or dense layer.");
                     }
                 }
-                LayerType::Dense(layer) => layer.output_size(),
-                LayerType::Flatten(layer) => {
-                    layer.input_shape().0 * layer.input_shape().1 * layer.input_shape().2
                 }
-                LayerType::GlobalAvgPooling(layer) => layer.output_size(),
+                LayerType::Dense(layer) => layer.output_shape(),
+                LayerType::Flatten(layer) => (
+                    self.mini_batch_size,
+                    layer.input_shape().0 * layer.input_shape().1 * layer.input_shape().2,
+                ),
+                LayerType::GlobalAvgPooling(layer) => layer.output_shape(),
                 _ => panic!("Add dense layer after a flatten, global average or dense layer."),
             },
             None => panic!("Add dense layer after a flatten, global average or dense layer."),
         };
 
-        self.add_layer(LayerType::Dense(DenseLayer::new(input_size, neurons, bias)));
+        self.add_layer(LayerType::Dense(DenseLayer::new(
+            input_shape,
+            neurons,
+            bias,
+        )));
     }
 
     pub fn train(&mut self, labels: Vec<Labels>) {
@@ -334,7 +345,7 @@ impl CNN {
         for layer in self.layers.iter_mut() {
             match layer {
                 LayerType::Activation(activation_layer) => {
-                    if activation_layer.input_shape().len() == 1 {
+                    if activation_layer.input_shape().len() == 2 {
                         flatten_input =
                             activation_layer.forward_propagate(&flatten_input, is_training);
                     } else {
@@ -370,7 +381,7 @@ impl CNN {
         for layer in self.layers.iter_mut().rev() {
             match layer {
                 LayerType::Activation(activation_layer) => {
-                    if activation_layer.input_shape().len() == 1 {
+                    if activation_layer.input_shape().len() == 2 {
                         error = activation_layer.backward_propagate(error, self.lr);
                     } else {
                         shaped_error = activation_layer.backward_propagate(shaped_error, self.lr);

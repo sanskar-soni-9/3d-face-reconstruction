@@ -19,8 +19,8 @@ impl GlobalAvgPoolingLayer {
         self.calculate_next_err(error)
     }
 
-    pub fn output_size(&self) -> usize {
-        self.input_shape.1
+    pub fn output_shape(&self) -> (usize, usize) {
+        (self.input_shape.0, self.input_shape.1)
     }
 
     fn calculate_output(&self, input: &Array4<f64>) -> Array2<f64> {

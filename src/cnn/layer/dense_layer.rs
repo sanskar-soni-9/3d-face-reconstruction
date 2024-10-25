@@ -8,19 +8,19 @@ use rayon::prelude::*;
 pub struct DenseLayer {
     weights: Array2<f64>,
     biases: Array1<f64>,
-    input_size: usize,
-    output_size: usize,
+    input_shape: (usize, usize),
+    output_shape: (usize, usize),
     #[serde(skip)]
     input: Array2<f64>,
 }
 
 impl DenseLayer {
-    pub fn new(input_size: usize, output_size: usize, bias: f64) -> Self {
-        let limit = (3.0 * (DENSE_WEIGHT_SCALE / input_size as f64)).sqrt();
+    pub fn new(input_shape: (usize, usize), output_size: usize, bias: f64) -> Self {
+        let limit = (3.0 * (DENSE_WEIGHT_SCALE / input_shape.1 as f64)).sqrt();
         let normal_distr = Uniform::new(-limit, limit);
         let mut rng = rand::thread_rng();
 
-        let mut weights: Array2<f64> = Array2::zeros((output_size, input_size));
+        let mut weights: Array2<f64> = Array2::zeros((output_size, input_shape.1));
         weights.iter_mut().for_each(|val| {
             *val = rng.sample(normal_distr);
         });
@@ -29,9 +29,9 @@ impl DenseLayer {
         DenseLayer {
             weights,
             biases,
-            output_size,
+            output_shape: (input_shape.0, output_size),
             input: Array2::zeros((0, 0)),
-            input_size,
+            input_shape,
         }
     }
 
@@ -48,12 +48,12 @@ impl DenseLayer {
         next_error
     }
 
-    pub fn output_size(&self) -> usize {
-        self.output_size
+    pub fn output_shape(&self) -> (usize, usize) {
+        self.output_shape
     }
 
     fn calculate_output(&self, input: &Array2<f64>) -> Array2<f64> {
-        let mut output = Array2::zeros((input.shape()[0], self.output_size));
+        let mut output = Array2::zeros((self.output_shape.0, self.output_shape.1));
         output
             .outer_iter_mut()
             .enumerate()
@@ -61,7 +61,7 @@ impl DenseLayer {
             .for_each(|(op_i, mut op)| {
                 op.indexed_iter_mut().par_bridge().for_each(|(i, val)| {
                     let mut wi = 0.0;
-                    for j in 0..self.input_size {
+                    for j in 0..self.input_shape.1 {
                         wi += self.weights[[i, j]] * input[[op_i, j]];
                     }
                     *val = wi + self.biases[[i]];
@@ -89,7 +89,7 @@ impl DenseLayer {
 
     fn calculate_delta_w(&self, err: &Array2<f64>) -> Array2<f64> {
         let mut weight_grads: Array3<f64> =
-            Array3::zeros((self.input.shape()[0], self.output_size, self.input_size));
+            Array3::zeros((self.output_shape.0, self.output_shape.1, self.input_shape.1));
 
         weight_grads
             .outer_iter_mut()
@@ -98,7 +98,7 @@ impl DenseLayer {
             .for_each(|(wei_i, mut wei_grd)| {
                 wei_grd
                     .outer_iter_mut()
-                    .zip(0..self.output_size)
+                    .zip(0..self.output_shape.1)
                     .par_bridge()
                     .for_each(|(mut row, row_i)| {
                         row.indexed_iter_mut().for_each(|(col_i, col)| {

@@ -43,7 +43,7 @@ impl ActivationLayer {
             .iter_mut()
             .zip(&self.input)
             .par_bridge()
-            .for_each(|(err, inp)| *err = self.activation.deactivate(*inp));
+            .for_each(|(err, inp)| *err *= self.activation.deactivate(*inp));
         error
     }
 
