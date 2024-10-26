@@ -1,15 +1,18 @@
 use crate::config::{DEFAULT_LEARNING_RATE, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, TRAINIG_LABELS};
 use crate::dataset::Labels;
 use activation::Activation;
+use cache::CNNCache;
 use layer::{
-    activation_layer::*, convolutional_layer::*, dense_layer::*, depthwise_conv_layer::*,
-    flatten_layer::*, global_avg_pooling_layer::*, max_pooling_layer::*, LayerType,
+    activation_layer::*, batch_norm_layer::*, convolutional_layer::*, dense_layer::*,
+    depthwise_conv_layer::*, flatten_layer::*, global_avg_pooling_layer::*, max_pooling_layer::*,
+    LayerType,
 };
-use ndarray::{s, Array1, Array2, Array3, Array4};
+use ndarray::{s, Array1, Array2, Array3, Array4, Dim};
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
 pub mod activation;
+mod cache;
 mod layer;
 
 #[derive(Serialize, Deserialize)]
@@ -20,6 +23,8 @@ pub struct CNN {
     cur_epoch: usize,
     #[serde(skip)]
     data: Vec<Array3<f64>>,
+    #[serde(skip)]
+    store: CNNCache,
     lr: f64,
 }
 
@@ -31,6 +36,7 @@ impl CNN {
             epochs,
             cur_epoch: 0,
             data: inputs,
+            store: CNNCache::default(),
             lr,
         }
     }
@@ -50,6 +56,7 @@ impl CNN {
         let input_shape = match self.layers.last() {
             Some(layer) => match layer {
                 LayerType::Activation(layer) => layer.input_shape().to_owned(),
+                LayerType::BatchNormLayer(layer) => layer.input_shape().to_owned(),
                 LayerType::Convolutional(layer) => {
                     let shape = layer.output_shape();
                     vec![shape.0, shape.1, shape.2, shape.3]
@@ -80,6 +87,43 @@ impl CNN {
         )));
     }
 
+    pub fn add_batch_norm_layer(&mut self, axis: usize, epsilon: f64, momentum: f64) {
+        let input_shape = match self.layers.last() {
+            Some(layer) => match layer {
+                LayerType::Activation(layer) => layer.input_shape().to_owned(),
+                LayerType::BatchNormLayer(layer) => layer.input_shape().to_owned(),
+                LayerType::Convolutional(layer) => {
+                    let shape = layer.output_shape();
+                    vec![shape.0, shape.1, shape.2, shape.3]
+                }
+                LayerType::Dense(layer) => {
+                    let shape = layer.output_shape();
+                    vec![shape.0, shape.1]
+                }
+                LayerType::DepthwiseConvLayer(layer) => {
+                    let shape = layer.output_shape();
+                    vec![shape.0, shape.1, shape.2, shape.3]
+                }
+                LayerType::Flatten(layer) => vec![layer.output_size()],
+                LayerType::GlobalAvgPooling(layer) => {
+                    let shape = layer.output_shape();
+                    vec![shape.0, shape.1]
+                }
+                LayerType::MaxPooling(layer) => {
+                    let shape = layer.output_shape();
+                    vec![shape.0, shape.1, shape.2, shape.3]
+                }
+            },
+            None => panic!("Batch Layer can not be the first layer."),
+        };
+        self.add_layer(LayerType::BatchNormLayer(BatchNormLayer::new(
+            axis,
+            epsilon,
+            input_shape,
+            momentum,
+        )));
+    }
+
     pub fn add_convolutional_layer(
         &mut self,
         filters: usize,
@@ -93,6 +137,16 @@ impl CNN {
         let input_shape = match self.layers.last() {
             Some(layer) => match layer {
                 LayerType::Activation(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 4 {
+                        (shape[0], shape[1], shape[2], shape[3])
+                    } else {
+                        panic!(
+                            "Add convolutional layer after a convolutional or max pooling layer."
+                        );
+                    }
+                }
+                LayerType::BatchNormLayer(layer) => {
                     let shape = layer.input_shape();
                     if shape.len() == 4 {
                         (shape[0], shape[1], shape[2], shape[3])
@@ -144,6 +198,14 @@ impl CNN {
                         panic!("Add mbconv layer after a convolutional or max pool layer.");
                     }
                 }
+                LayerType::BatchNormLayer(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 4 {
+                        (shape[0], shape[1], shape[2], shape[3])
+                    } else {
+                        panic!("Add mbconv layer after a convolutional or max pooling layer.");
+                    }
+                }
                 LayerType::Convolutional(layer) => layer.output_shape(),
                 LayerType::MaxPooling(layer) => layer.output_shape(),
                 _ => panic!("Add mbconv layer after a convolutional or max pool layer."),
@@ -167,10 +229,13 @@ impl CNN {
         let layer3 = ConvolutionalLayer::new(filters, 1, 1, layer2.output_shape(), add_padding);
 
         self.add_layer(LayerType::Convolutional(layer1));
+        self.add_batch_norm_layer(1, 0.01, 0.99);
         self.add_activation_layer(Activation::ReLU6);
         self.add_layer(LayerType::DepthwiseConvLayer(layer2));
+        self.add_batch_norm_layer(1, 0.01, 0.99);
         self.add_activation_layer(Activation::ReLU6);
         self.add_layer(LayerType::Convolutional(layer3));
+        self.add_batch_norm_layer(1, 0.01, 0.99);
     }
 
     pub fn add_global_avg_pooling_layer(&mut self) {
@@ -184,6 +249,14 @@ impl CNN {
                         panic!(
                             "Add global average pooling layer after a convolutional or pooling layer."
                         );
+                    }
+                }
+                LayerType::BatchNormLayer(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 4 {
+                        (shape[0], shape[1], shape[2], shape[3])
+                    } else {
+                        panic!("Add global average pooling layer after a convolutional or pooling layer.");
                     }
                 }
                 LayerType::Convolutional(layer) => layer.output_shape(),
@@ -208,6 +281,14 @@ impl CNN {
         let output_shape = match self.layers.last() {
             Some(layer) => match layer {
                 LayerType::Activation(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 4 {
+                        (shape[0], shape[1], shape[2], shape[3])
+                    } else {
+                        panic!("Add max pooling layer after a convolutional or max pooling layer.");
+                    }
+                }
+                LayerType::BatchNormLayer(layer) => {
                     let shape = layer.input_shape();
                     if shape.len() == 4 {
                         (shape[0], shape[1], shape[2], shape[3])
@@ -240,6 +321,14 @@ impl CNN {
                         panic!("Add flatten layer after a convolutional or max pooling layer.");
                     }
                 }
+                LayerType::BatchNormLayer(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 4 {
+                        (shape[0], shape[1], shape[2], shape[3])
+                    } else {
+                        panic!("Add flatten layer after a convolutional or max pooling layer.");
+                    }
+                }
                 LayerType::Convolutional(layer) => layer.output_shape(),
                 LayerType::MaxPooling(layer) => layer.output_shape(),
                 _ => panic!("Add flatten layer after a convolutional or max pooling layer."),
@@ -260,6 +349,13 @@ impl CNN {
                         panic!("Add dense layer after a flatten, global average or dense layer.");
                     }
                 }
+                LayerType::BatchNormLayer(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 2 {
+                        (shape[0], shape[1])
+                    } else {
+                        panic!("Add dense layer after a flatten, global average or dense layer.");
+                    }
                 }
                 LayerType::Dense(layer) => layer.output_shape(),
                 LayerType::Flatten(layer) => (
@@ -352,6 +448,22 @@ impl CNN {
                         input = activation_layer.forward_propagate(&input, is_training);
                     }
                 }
+                LayerType::BatchNormLayer(batchnorm_layer) => {
+                    if batchnorm_layer.input_shape().len() == 2 {
+                        let cache: Option<BNCache<Dim<[usize; 2]>>>;
+                        (flatten_input, cache) =
+                            batchnorm_layer.forward_propagate(flatten_input, is_training);
+                        if let Some(cache) = cache {
+                            self.store.add_bn2(cache);
+                        }
+                    } else {
+                        let cache: Option<BNCache<Dim<[usize; 4]>>>;
+                        (input, cache) = batchnorm_layer.forward_propagate(input, is_training);
+                        if let Some(cache) = cache {
+                            self.store.add_bn4(cache);
+                        }
+                    }
+                }
                 LayerType::Convolutional(convolutional_layer) => {
                     input = convolutional_layer.forward_propagate(input, is_training);
                 }
@@ -376,6 +488,7 @@ impl CNN {
     }
 
     fn backward_propagate(&mut self, mut error: Array2<f64>) {
+        let cache_err = "No cache found for backpropagation calculations.";
         let mut shaped_error: Array4<f64> = Array4::zeros((0, 0, 0, 0));
 
         for layer in self.layers.iter_mut().rev() {
@@ -385,6 +498,16 @@ impl CNN {
                         error = activation_layer.backward_propagate(error, self.lr);
                     } else {
                         shaped_error = activation_layer.backward_propagate(shaped_error, self.lr);
+                    }
+                }
+                LayerType::BatchNormLayer(batchnorm_layer) => {
+                    if batchnorm_layer.input_shape().len() == 2 {
+                        let cache = self.store.consume_bn2().expect(cache_err);
+                        error = batchnorm_layer.backward_propagate(error, cache, self.lr);
+                    } else {
+                        let cache = self.store.consume_bn4().expect(cache_err);
+                        shaped_error =
+                            batchnorm_layer.backward_propagate(shaped_error, cache, self.lr);
                     }
                 }
                 LayerType::Convolutional(convolutional_layer) => {
