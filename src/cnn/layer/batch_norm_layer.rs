@@ -73,7 +73,6 @@ impl BatchNormLayer {
                 var_inv,
                 xhat,
             };
-
             return (output, Some(cache));
         }
         (activations, None)
@@ -88,14 +87,10 @@ impl BatchNormLayer {
     where
         D: Dimension + RemoveAxis,
     {
-        let d_beta = error.sum_axis(Axis(self.axis));
-
-        let d_gamma: Array<f64, D> = &error * &cache.xhat;
-        let d_gamma = d_gamma.sum_axis(Axis(self.axis));
-
         let m = self.get_reduction_size(error.shape(), &self.reduced_axes) as f64;
 
-        let d_xhat: Array<f64, D> = self.mul_along_axis_with_1dim(error, &self.gamma, self.axis);
+        let d_xhat: Array<f64, D> =
+            self.mul_along_axis_with_1dim(error.clone(), &self.gamma, self.axis);
 
         let d_var: Array<f64, D> = &d_xhat * &cache.xmu * &(cache.var.powf(-3. / 2.) * -0.5);
         let d_var = self.sum_reduced_axes(d_var, &self.reduced_axes);
@@ -105,32 +100,35 @@ impl BatchNormLayer {
 
         let d_x = d_xhat * &cache.var_inv + &d_var * 2. * &cache.xmu / m + &d_mu / m;
 
-        self.update_beta::<D>(&d_beta, lr);
-        self.update_gamma::<D>(&d_gamma, lr);
+        let d_gamma = self.sum_reduced_axes(&error * &cache.xhat, &self.reduced_axes);
+        self.update_gamma(&d_gamma, lr);
+
+        let d_beta = self.sum_reduced_axes(error, &self.reduced_axes);
+        self.update_beta(&d_beta, lr);
 
         d_x
     }
 
-    fn update_beta<D>(&mut self, beta_grad: &Array<f64, <D as Dimension>::Smaller>, lr: f64)
+    fn update_beta<D>(&mut self, beta_grad: &Array<f64, D>, lr: f64)
     where
-        D: Dimension,
+        D: Dimension + RemoveAxis,
     {
         self.beta
             .iter_mut()
-            .zip(beta_grad.iter())
+            .zip(beta_grad.axis_iter(Axis(self.axis)))
             .par_bridge()
-            .for_each(|(beta, beta_grd)| *beta -= beta_grd * lr);
+            .for_each(|(beta, beta_grd)| *beta -= beta_grd.first().unwrap() * lr);
     }
 
-    fn update_gamma<D>(&mut self, gamma_grad: &Array<f64, <D as Dimension>::Smaller>, lr: f64)
+    fn update_gamma<D>(&mut self, gamma_grad: &Array<f64, D>, lr: f64)
     where
-        D: Dimension,
+        D: Dimension + RemoveAxis,
     {
         self.gamma
             .iter_mut()
-            .zip(gamma_grad.iter())
+            .zip(gamma_grad.axis_iter(Axis(self.axis)))
             .par_bridge()
-            .for_each(|(gamma, gamma_grd)| *gamma -= gamma_grd * lr);
+            .for_each(|(gamma, gamma_grd)| *gamma -= gamma_grd.first().unwrap() * lr);
     }
 
     pub fn input_shape(&self) -> &[usize] {
