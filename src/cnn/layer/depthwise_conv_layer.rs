@@ -88,8 +88,9 @@ impl DepthwiseConvolutionalLayer {
     }
 
     pub fn backward_propagate(&mut self, error: Array4<f64>, lr: f64) -> Array4<f64> {
+        let next_error = self.calculate_next_err(&error);
         self.kernels -= &(self.calculate_delta_k(&error) * lr);
-        self.calculate_next_err(&error)
+        next_error
     }
 
     pub fn output_shape(&self) -> Tensor4DShape {
