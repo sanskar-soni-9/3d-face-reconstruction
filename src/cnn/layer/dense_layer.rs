@@ -53,18 +53,18 @@ impl DenseLayer {
     }
 
     fn calculate_output(&self, input: &Array2<f64>) -> Array2<f64> {
-        let mut output = Array2::zeros((self.output_shape.0, self.output_shape.1));
+        let mut output = Array2::zeros(self.output_shape);
         output
             .outer_iter_mut()
             .enumerate()
             .par_bridge()
             .for_each(|(op_i, mut op)| {
                 op.indexed_iter_mut().par_bridge().for_each(|(i, val)| {
-                    let mut wi = 0.0;
-                    for j in 0..self.input_shape.1 {
-                        wi += self.weights[[i, j]] * input[[op_i, j]];
-                    }
-                    *val = wi + self.biases[[i]];
+                    *val = self
+                        .weights
+                        .slice(s![i, ..])
+                        .dot(&input.slice(s![op_i, ..]))
+                        + self.biases[[i]];
                 });
             });
         output
@@ -88,8 +88,11 @@ impl DenseLayer {
     }
 
     fn calculate_delta_w(&self, err: &Array2<f64>) -> Array2<f64> {
-        let mut weight_grads: Array3<f64> =
-            Array3::zeros((self.output_shape.0, self.output_shape.1, self.input_shape.1));
+        let mut weight_grads: Array3<f64> = Array3::zeros((
+            self.output_shape.0,
+            self.weights.shape()[0],
+            self.weights.shape()[1],
+        ));
 
         weight_grads
             .outer_iter_mut()
@@ -98,11 +101,11 @@ impl DenseLayer {
             .for_each(|(wei_i, mut wei_grd)| {
                 wei_grd
                     .outer_iter_mut()
-                    .zip(0..self.output_shape.1)
+                    .enumerate()
                     .par_bridge()
-                    .for_each(|(mut row, row_i)| {
+                    .for_each(|(row_i, mut row)| {
                         row.indexed_iter_mut().for_each(|(col_i, col)| {
-                            *col = err[[wei_i, row_i]] * self.input[[wei_i, col_i]];
+                            *col = err[[wei_i, row_i]] * self.input[[wei_i, col_i]]
                         })
                     });
             });

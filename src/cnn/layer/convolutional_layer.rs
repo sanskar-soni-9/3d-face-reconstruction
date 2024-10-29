@@ -121,18 +121,16 @@ impl ConvolutionalLayer {
             .zip(input.outer_iter())
             .par_bridge()
             .for_each(|(mut op, inp)| {
-                let mut indexed_output_iter: Vec<((usize, usize, usize), &mut f64)> =
-                    op.indexed_iter_mut().collect();
-                indexed_output_iter
-                    .par_iter_mut()
+                op.indexed_iter_mut()
+                    .par_bridge()
                     .for_each(|((f, mut y, mut x), output_val)| {
                         y *= self.strides;
                         x *= self.strides;
-                        **output_val = (&inp.slice(s![
+                        *output_val = (&inp.slice(s![
                             ..,
                             y..y + self.kernel_shape.2,
                             x..x + self.kernel_shape.3
-                        ]) * &self.kernels.slice(s![*f, .., .., ..]))
+                        ]) * &self.kernels.slice(s![f, .., .., ..]))
                             .sum();
                     });
             });
@@ -148,9 +146,9 @@ impl ConvolutionalLayer {
             .for_each(|(n_err_i, mut n_err)| {
                 n_err
                     .axis_iter_mut(Axis(1))
-                    .zip(0..self.input_shape.2)
+                    .enumerate()
                     .par_bridge()
-                    .for_each(|(mut row, row_i)| {
+                    .for_each(|(row_i, mut row)| {
                         if row_i < self.padding.2 {
                             return;
                         }
@@ -214,9 +212,9 @@ impl ConvolutionalLayer {
             .par_bridge()
             .for_each(|(kg_i, mut kg)| {
                 kg.outer_iter_mut()
-                    .zip(0..self.kernel_shape.0)
+                    .enumerate()
                     .par_bridge()
-                    .for_each(|(mut kernel, kernel_i)| {
+                    .for_each(|(kernel_i, mut kernel)| {
                         for row in
                             (0..self.input_shape.2 - self.kernel_shape.2 + 1).step_by(self.strides)
                         {

@@ -146,9 +146,9 @@ impl DepthwiseConvolutionalLayer {
             .for_each(|(n_err_i, mut n_err)| {
                 n_err
                     .axis_iter_mut(Axis(1))
-                    .zip(0..self.input_shape.2)
+                    .enumerate()
                     .par_bridge()
-                    .for_each(|(mut row, row_i)| {
+                    .for_each(|(row_i, mut row)| {
                         if row_i < self.padding.2 {
                             return;
                         }
@@ -211,9 +211,9 @@ impl DepthwiseConvolutionalLayer {
             .par_bridge()
             .for_each(|(kg_i, mut kg)| {
                 kg.outer_iter_mut()
-                    .zip(0..self.kernel_shape.0)
+                    .enumerate()
                     .par_bridge()
-                    .for_each(|(mut kernel, kernel_i)| {
+                    .for_each(|(kernel_i, mut kernel)| {
                         for row in
                             (0..self.input_shape.2 - self.kernel_shape.2 + 1).step_by(self.strides)
                         {

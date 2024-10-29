@@ -27,12 +27,12 @@ impl GlobalAvgPoolingLayer {
         let mut output: Array2<f64> = Array2::zeros((self.input_shape.0, self.input_shape.1));
         output
             .outer_iter_mut()
-            .enumerate()
+            .zip(input.outer_iter())
             .par_bridge()
-            .for_each(|(idx, mut op)| {
+            .for_each(|(mut op, inp)| {
                 op.indexed_iter_mut().par_bridge().for_each(|(i, out)| {
-                    *out = input
-                        .slice(s![idx, i, .., ..])
+                    *out = inp
+                        .slice(s![i, .., ..])
                         .mean()
                         .expect("Average array is empty?")
                 });
@@ -50,9 +50,9 @@ impl GlobalAvgPoolingLayer {
             .for_each(|(idx, mut n_err)| {
                 n_err
                     .outer_iter_mut()
-                    .zip(0..self.input_shape.0)
+                    .enumerate()
                     .par_bridge()
-                    .for_each(|(mut e, i)| e += err[[idx, i]] * avg_prime);
+                    .for_each(|(i, mut e)| e += err[[idx, i]] * avg_prime);
             });
 
         next_error

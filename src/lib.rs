@@ -1,5 +1,8 @@
 use cnn::{activation::Activation, CNN};
-use config::{CNN_OUTPUT_SIZE, DEFAULT_LEARNING_RATE, INPUT_SHAPE, MINI_BATCH_SIZE, OUTPUT_DIR};
+use config::{
+    BATCH_EPSILON, CNN_OUTPUT_SIZE, DEFAULT_LEARNING_RATE, INPUT_SHAPE, MINI_BATCH_SIZE,
+    NORM_MOMENTUM, OUTPUT_DIR,
+};
 use dataset::Dataset;
 use image::{imageops::FilterType, DynamicImage, GenericImage, GenericImageView, Rgba};
 use ndarray::Array3;
@@ -18,11 +21,10 @@ pub fn infer(model: &str, image_paths: Vec<String>) {
         let labels = cnn.infer(i);
         let mut new_img = get_image(image);
         for i in 0..labels.len() / 2 {
-            new_img.put_pixel(
-                labels[i] as u32,
-                labels[(labels.len() / 2) + i] as u32,
-                Rgba([255, 255, 255, 1]),
-            );
+            let (x, y) = (labels[i] as u32, labels[(labels.len() / 2) + i] as u32);
+            if x < INPUT_SHAPE.2 as u32 && y < INPUT_SHAPE.1 as u32 {
+                new_img.put_pixel(x, y, Rgba([255, 255, 255, 1]));
+            }
         }
         let image_path = format!("{}/img{}.png", OUTPUT_DIR, i);
         new_img.save(&image_path).unwrap_or_else(|e| {
@@ -36,7 +38,7 @@ pub fn infer(model: &str, image_paths: Vec<String>) {
 
 pub fn train(model: Option<&str>, data: Dataset, epochs: usize, lr: Option<&str>) {
     let mut images = vec![];
-    let mut count = 50;
+    let mut count = 80;
     for label in data.labels.iter() {
         // Temporary
         if count == 0 {
@@ -91,7 +93,7 @@ pub fn get_ndimages(image_paths: &[String]) -> Vec<Array3<f64>> {
 fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
     let mut cnn = cnn::CNN::new(MINI_BATCH_SIZE, epochs, images, DEFAULT_LEARNING_RATE);
     cnn.add_convolutional_layer(32, 3, 2, true);
-    cnn.add_batch_norm_layer(1, 0.01, 0.99);
+    cnn.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
     cnn.add_activation_layer(Activation::SiLU);
 
     cnn.add_mbconv_layer(1, 16, 3, 1, true);
@@ -118,13 +120,13 @@ fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
     cnn.add_mbconv_layer(6, 320, 3, 1, true);
 
     cnn.add_convolutional_layer(1280, 1, 1, true);
-    cnn.add_batch_norm_layer(1, 0.01, 0.99);
+    cnn.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
     cnn.add_activation_layer(Activation::SiLU);
 
     cnn.add_global_avg_pooling_layer();
 
     cnn.add_dense_layer(CNN_OUTPUT_SIZE, 0.0);
-    cnn.add_batch_norm_layer(1, 0.01, 0.99);
+    cnn.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
     cnn.add_activation_layer(Activation::SiLU);
     cnn
 }

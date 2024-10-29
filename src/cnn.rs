@@ -1,4 +1,7 @@
-use crate::config::{DEFAULT_LEARNING_RATE, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, TRAINIG_LABELS};
+use crate::config::{
+    BATCH_EPSILON, DEFAULT_LEARNING_RATE, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, NORM_MOMENTUM,
+    TRAINIG_LABELS,
+};
 use crate::dataset::Labels;
 use activation::Activation;
 use cache::CNNCache;
@@ -229,13 +232,13 @@ impl CNN {
         let layer3 = ConvolutionalLayer::new(filters, 1, 1, layer2.output_shape(), add_padding);
 
         self.add_layer(LayerType::Convolutional(layer1));
-        self.add_batch_norm_layer(1, 0.01, 0.99);
-        self.add_activation_layer(Activation::ReLU6);
+        self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
+        self.add_activation_layer(Activation::SiLU);
         self.add_layer(LayerType::DepthwiseConvLayer(layer2));
-        self.add_batch_norm_layer(1, 0.01, 0.99);
-        self.add_activation_layer(Activation::ReLU6);
+        self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
+        self.add_activation_layer(Activation::SiLU);
         self.add_layer(LayerType::Convolutional(layer3));
-        self.add_batch_norm_layer(1, 0.01, 0.99);
+        self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
     }
 
     pub fn add_global_avg_pooling_layer(&mut self) {
@@ -377,7 +380,6 @@ impl CNN {
 
     pub fn train(&mut self, labels: Vec<Labels>) {
         for e in self.cur_epoch..self.epochs {
-            self.cur_epoch = e;
             for batch in (0..labels.len())
                 .take(self.data.len())
                 .step_by(self.mini_batch_size)
@@ -397,7 +399,7 @@ impl CNN {
                     input
                         .slice_mut(s![j, .., .., ..])
                         .assign(&self.data[batch + j]);
-                    training_labels.push(self.prepare_training_labels(&labels[batch]));
+                    training_labels.push(self.prepare_training_labels(&labels[batch + j]));
                 }
 
                 let start_time = std::time::SystemTime::now();
@@ -416,21 +418,19 @@ impl CNN {
                         err.assign(&(&prediction.slice(s![idx, ..]) - &training_labels[idx]));
                     });
 
-                println!(
-                    "PREDICTION: {:?}\n\nEXPECTED: {:?}\n\nERROR: {:?}\n\n",
-                    prediction, training_labels, error
-                );
+                println!("PREDICTION: {:?}\nERROR: {:?}\n", prediction, error);
 
                 self.backward_propagate(error);
                 let backward_time = std::time::SystemTime::now();
                 println!(
-                    "\nBACKWARD TOOK: {:?}\n\nIMAGE TOOK: {:?}\n\n",
+                    "BACKWARD TOOK: {:?}\n\nIMAGE TOOK: {:?}\n",
                     backward_time.duration_since(forward_time),
                     backward_time.duration_since(start_time)
                 );
             }
-            println!("Epoch {} complete saving model.\n", e);
-            self.save(&format!("{}{}", EPOCH_MODEL, e));
+            self.cur_epoch = e + 1;
+            println!("Epoch {} complete saving model.\n", self.cur_epoch);
+            self.save(&format!("{}{}", EPOCH_MODEL, self.cur_epoch));
         }
     }
 
