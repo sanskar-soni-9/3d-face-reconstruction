@@ -41,41 +41,53 @@ impl BatchNormLayer {
         }
     }
 
+    pub fn input_shape(&self) -> &[usize] {
+        &self.input_shape
+    }
+
     pub fn forward_propagate<D>(
         &mut self,
-        activations: Array<f64, D>,
+        mut activations: Array<f64, D>,
         is_training: bool,
     ) -> (Array<f64, D>, Option<BNCache<D>>)
     where
         D: Dimension,
         D: RemoveAxis,
     {
-        // TODO: Implement Infer & Update Moving avgs
         if is_training {
             let mean = self.mean_reduced_axes(activations.clone(), &self.reduced_axes);
-            let xmu = activations - mean;
-            let var = self.mean_reduced_axes(xmu.powi(2), &self.reduced_axes) + self.epsilon;
-            let var_inv = 1. / var.sqrt();
+            let xmu = activations - &mean;
+            let var = self.mean_reduced_axes(xmu.powi(2), &self.reduced_axes);
+            let var_ep = &var + self.epsilon;
+            let var_inv = 1. / var_ep.sqrt();
             let xhat = &xmu * &var_inv;
-            let mut output = xhat.clone();
-            output
-                .axis_iter_mut(Axis(self.axis))
-                .zip(self.gamma.iter())
-                .zip(self.beta.iter())
-                .for_each(|((mut out, gm), bt)| {
-                    out *= *gm;
-                    out += *bt;
-                });
+
+            let output = self.scale_and_shift(xhat.clone());
+
+            self.update_moving_mean(&mean);
+            self.update_moving_variance(&var);
 
             let cache = BNCache {
                 xmu,
-                var,
+                var: var_ep,
                 var_inv,
                 xhat,
             };
-            return (output, Some(cache));
+            (output, Some(cache))
+        } else {
+            activations
+                .axis_iter_mut(Axis(self.axis))
+                .enumerate()
+                .par_bridge()
+                .for_each(|(idx, mut actvn)| {
+                    actvn.assign(
+                        &((&actvn - self.moving_mean[[idx]])
+                            / (self.moving_variance[[idx]] + self.epsilon).sqrt()),
+                    );
+                });
+            activations = self.scale_and_shift(activations);
+            (activations, None)
         }
-        (activations, None)
     }
 
     pub fn backward_propagate<D>(
@@ -109,6 +121,32 @@ impl BatchNormLayer {
         d_x
     }
 
+    fn update_moving_mean<D>(&mut self, mean: &Array<f64, D>)
+    where
+        D: Dimension + RemoveAxis,
+    {
+        self.moving_mean
+            .iter_mut()
+            .zip(mean.axis_iter(Axis(self.axis)))
+            .par_bridge()
+            .for_each(|(mvng_mu, mu)| {
+                *mvng_mu = *mvng_mu * self.momentum + mu.first().unwrap() * (1. - self.momentum)
+            });
+    }
+
+    fn update_moving_variance<D>(&mut self, var: &Array<f64, D>)
+    where
+        D: Dimension + RemoveAxis,
+    {
+        self.moving_variance
+            .iter_mut()
+            .zip(var.axis_iter(Axis(self.axis)))
+            .par_bridge()
+            .for_each(|(mvng_var, var)| {
+                *mvng_var = *mvng_var * self.momentum + var.first().unwrap() * (1. - self.momentum)
+            });
+    }
+
     fn update_beta<D>(&mut self, beta_grad: &Array<f64, D>, lr: f64)
     where
         D: Dimension + RemoveAxis,
@@ -131,8 +169,19 @@ impl BatchNormLayer {
             .for_each(|(gamma, gamma_grd)| *gamma -= gamma_grd.first().unwrap() * lr);
     }
 
-    pub fn input_shape(&self) -> &[usize] {
-        &self.input_shape
+    fn scale_and_shift<D>(&self, mut activations: Array<f64, D>) -> Array<f64, D>
+    where
+        D: Dimension + RemoveAxis,
+    {
+        activations
+            .axis_iter_mut(Axis(self.axis))
+            .enumerate()
+            .par_bridge()
+            .for_each(|(idx, mut out)| {
+                out *= self.gamma[[idx]];
+                out += self.beta[[idx]];
+            });
+        activations
     }
 
     fn mul_along_axis_with_1dim<D>(
