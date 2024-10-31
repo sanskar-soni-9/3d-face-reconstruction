@@ -8,9 +8,10 @@ use cache::CNNCache;
 use layer::{
     activation_layer::*, batch_norm_layer::*, convolutional_layer::*, dense_layer::*,
     depthwise_conv_layer::*, flatten_layer::*, global_avg_pooling_layer::*, max_pooling_layer::*,
-    operation_layer::*, LayerType,
+    operation_layer::*, reshape_layer::*, LayerType,
 };
 use ndarray::{s, Array1, Array2, Array3, Array4, Dim};
+use rand_distr::num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 
@@ -83,6 +84,10 @@ impl CNN {
                 }
                 LayerType::Operand(layer) => layer.input_shape().to_owned(),
                 LayerType::Operation(layer) => layer.input_shape().to_owned(),
+                LayerType::Reshape(layer) => {
+                    let shape = layer.output_shape();
+                    vec![shape.0, shape.1, shape.2, shape.3]
+                }
             },
             None => panic!("Activation Layer can not be the first layer."),
         };
@@ -120,6 +125,10 @@ impl CNN {
                 }
                 LayerType::Operand(layer) => layer.input_shape().to_owned(),
                 LayerType::Operation(layer) => layer.input_shape().to_owned(),
+                LayerType::Reshape(layer) => {
+                    let shape = layer.output_shape();
+                    vec![shape.0, shape.1, shape.2, shape.3]
+                }
             },
             None => panic!("Batch Layer can not be the first layer."),
         };
@@ -173,6 +182,7 @@ impl CNN {
                     let shape = layer.input_shape();
                     (shape[0], shape[1], shape[2], shape[3])
                 }
+                LayerType::Reshape(layer) => layer.output_shape(),
                 _ => panic!("Add convolutional layer after a convolutional or max pooling layer."),
             },
             None => (
@@ -198,12 +208,13 @@ impl CNN {
         filters: usize,
         kernel_size: usize,
         strides: usize,
+        se_ratio: f64,
         add_padding: bool,
     ) {
         if strides == 0 {
             panic!("Stride should be greater than 0.");
         }
-        let input_shape = match self.layers.last() {
+        let mut input_shape = match self.layers.last() {
             Some(layer) => match layer {
                 LayerType::Activation(layer) => {
                     let shape = layer.input_shape();
@@ -231,6 +242,7 @@ impl CNN {
                     let shape = layer.input_shape();
                     (shape[0], shape[1], shape[2], shape[3])
                 }
+                LayerType::Reshape(layer) => layer.output_shape(),
                 _ => panic!("Add mbconv layer after a convolutional or max pool layer."),
             },
             None => (
@@ -241,8 +253,10 @@ impl CNN {
             ),
         };
 
+        let input_filters = input_shape.1;
         let addition_id = self.layers.len() - 1;
         let use_identity_skip = strides == 1 && filters == input_shape.1;
+
         if use_identity_skip {
             self.add_layer(LayerType::Operand(OperandLayer::new(
                 addition_id,
@@ -250,36 +264,76 @@ impl CNN {
             )));
         }
 
-        let layer1 =
-            ConvolutionalLayer::new(input_shape.0 * factor, 1, 1, input_shape, add_padding);
-        let layer2 = DepthwiseConvolutionalLayer::new(
-            kernel_size,
-            strides,
-            layer1.output_shape(),
-            add_padding,
-        );
-        let layer3 = ConvolutionalLayer::new(filters, 1, 1, layer2.output_shape(), add_padding);
-        let output_shape = layer3.output_shape();
+        // Expansion
+        if factor != 1 {
+            let layer =
+                ConvolutionalLayer::new(input_filters * factor, 1, 1, input_shape, add_padding);
+            input_shape = layer.output_shape();
+            self.add_layer(LayerType::Convolutional(layer));
+            self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
+            self.add_activation_layer(Activation::SiLU);
+        }
 
-        self.add_layer(LayerType::Convolutional(layer1));
+        // Depthwise Convolution
+        let layer =
+            DepthwiseConvolutionalLayer::new(kernel_size, strides, input_shape, add_padding);
+        input_shape = layer.output_shape();
+        self.add_layer(LayerType::DepthwiseConv(layer));
         self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
         self.add_activation_layer(Activation::SiLU);
-        self.add_layer(LayerType::DepthwiseConv(layer2));
+
+        // Squeeze and Excitation
+        if !se_ratio.is_zero() {
+            let reduced_filters = (input_filters as f64 * se_ratio).max(1.) as usize;
+            let mul_id = self.layers.len() - 1;
+            self.add_layer(LayerType::Operand(OperandLayer::new(
+                mul_id,
+                vec![input_shape.0, input_shape.1, input_shape.2, input_shape.3],
+            )));
+
+            let layer = GlobalAvgPoolingLayer::new(input_shape);
+            let mut se_input_shape = layer.output_shape();
+            self.add_layer(LayerType::GlobalAvgPooling(layer));
+
+            let layer = DenseLayer::new(se_input_shape, reduced_filters, 0.);
+            se_input_shape = layer.output_shape();
+            self.add_layer(LayerType::Dense(layer));
+            self.add_activation_layer(Activation::SiLU);
+
+            let layer = DenseLayer::new(se_input_shape, input_filters * factor, 0.);
+            se_input_shape = layer.output_shape();
+            self.add_layer(LayerType::Dense(layer));
+            self.add_activation_layer(Activation::SiLU);
+
+            let target_shape = (se_input_shape.0, se_input_shape.1, 1, 1);
+            let layer = ReshapeLayer::new(se_input_shape, target_shape, false);
+            let se_input_shape = layer.output_shape();
+            self.add_layer(LayerType::Reshape(layer));
+
+            self.add_layer(LayerType::Operation(OperationLayer::new(
+                mul_id,
+                vec![
+                    se_input_shape.0,
+                    se_input_shape.1,
+                    se_input_shape.2,
+                    se_input_shape.3,
+                ],
+                OperationType::Mul,
+            )));
+        }
+
+        // Output
+        let layer = ConvolutionalLayer::new(filters, 1, 1, input_shape, add_padding);
+        input_shape = layer.output_shape();
+        self.add_layer(LayerType::Convolutional(layer));
         self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
-        self.add_activation_layer(Activation::SiLU);
-        self.add_layer(LayerType::Convolutional(layer3));
-        self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
+
         if use_identity_skip {
             self.add_layer(LayerType::Operation(OperationLayer::new(
                 addition_id,
-                vec![
-                    output_shape.0,
-                    output_shape.1,
-                    output_shape.2,
-                    output_shape.3,
-                ],
+                vec![input_shape.0, input_shape.1, input_shape.2, input_shape.3],
                 OperationType::Add,
-            )))
+            )));
         }
     }
 
@@ -314,6 +368,7 @@ impl CNN {
                     let shape = layer.input_shape();
                     (shape[0], shape[1], shape[2], shape[3])
                 }
+                LayerType::Reshape(layer) => layer.output_shape(),
                 _ => panic!(
                     "Add global average pooling layer after a convolutional or pooling layer."
                 ),
@@ -359,6 +414,7 @@ impl CNN {
                     let shape = layer.input_shape();
                     (shape[0], shape[1], shape[2], shape[3])
                 }
+                LayerType::Reshape(layer) => layer.output_shape(),
                 _ => panic!("Add max pooling layer after a convolutional or max pooling layer."),
             },
             None => panic!("Add max pooling layer after a convolutional or max pooling layer."),
@@ -400,6 +456,7 @@ impl CNN {
                     let shape = layer.input_shape();
                     (shape[0], shape[1], shape[2], shape[3])
                 }
+                LayerType::Reshape(layer) => layer.output_shape(),
                 _ => panic!("Add flatten layer after a convolutional or max pooling layer."),
             },
             None => panic!("Add flatten layer after a convolutional or max pooling layer."),
@@ -584,6 +641,9 @@ impl CNN {
                         self.store.add_operand4d(id, cache);
                     }
                 }
+                LayerType::Reshape(reshape_layer) => {
+                    input = reshape_layer.forward_propagate(&flatten_input, is_training);
+                }
             };
         }
         flatten_input
@@ -655,6 +715,9 @@ impl CNN {
                             operation_layer.backward_propagate(shaped_error, cache, self.lr);
                         self.store.add_operand4d(operand_id, cache);
                     }
+                }
+                LayerType::Reshape(reshape_layer) => {
+                    error = reshape_layer.backward_propagate(&shaped_error, self.lr);
                 }
             }
         }

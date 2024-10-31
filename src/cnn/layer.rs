@@ -7,6 +7,7 @@ pub mod flatten_layer;
 pub mod global_avg_pooling_layer;
 pub mod max_pooling_layer;
 pub mod operation_layer;
+pub mod reshape_layer;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub enum LayerType {
@@ -20,4 +21,5 @@ pub enum LayerType {
     MaxPooling(max_pooling_layer::MaxPoolingLayer),
     Operand(operation_layer::OperandLayer),
     Operation(operation_layer::OperationLayer),
+    Reshape(reshape_layer::ReshapeLayer),
 }
