@@ -27,7 +27,13 @@ impl DepthwiseConvolutionalLayer {
         padding: bool,
     ) -> Self {
         if strides == 0 {
-            panic!("Stride should be greater than 0.");
+            panic!("Depth: Stride should be greater than 0.");
+        }
+        if input_shape.2 < kernel_size || input_shape.3 < kernel_size {
+            panic!("Depth: Input shape can not be smaller than kernel.");
+        }
+        if kernel_size == 0 {
+            panic!("Depth: Incorect kernel size.");
         }
 
         let mut rng = rand::thread_rng();
@@ -48,8 +54,8 @@ impl DepthwiseConvolutionalLayer {
             output_shape = (
                 input_shape.0,
                 input_shape.1,
-                input_shape.2 / strides,
-                input_shape.3 / strides,
+                (input_shape.2 / strides).max(1),
+                (input_shape.3 / strides).max(1),
             );
             input_shape = (
                 input_shape.0,
