@@ -1,5 +1,5 @@
 use crate::config::CONV_WEIGHT_SCALE;
-use ndarray::{s, Array3, Array4, Axis};
+use ndarray::{s, Array1, Array3, Array4, Axis};
 use rand::Rng;
 use rand_distr::Normal;
 use rayon::prelude::*;
@@ -14,6 +14,8 @@ pub struct DepthwiseConvolutionalLayer {
     input_shape: Tensor4DShape,
     output_shape: Tensor4DShape,
     kernels: Array3<f64>,
+    biases: Array1<f64>,
+    use_bias: bool,
     #[serde(skip)]
     input: Array4<f64>,
     padding: Tensor4DShape, // (left, right, top, bottom)
@@ -24,6 +26,7 @@ impl DepthwiseConvolutionalLayer {
         kernel_size: usize,
         strides: usize,
         mut input_shape: Tensor4DShape,
+        bias: Option<f64>,
         padding: bool,
     ) -> Self {
         if strides == 0 {
@@ -42,6 +45,12 @@ impl DepthwiseConvolutionalLayer {
         let normal_distr = Normal::new(0.0, std_dev).unwrap();
         let kernel_shape = (input_shape.1, kernel_size, kernel_size);
         let kernels = Array3::from_shape_fn(kernel_shape, |_| rng.sample(normal_distr));
+
+        let (use_bias, bias) = match bias {
+            Some(bias) => (true, bias),
+            None => (false, 0.),
+        };
+        let biases = Array1::from_elem(input_shape.1, bias);
 
         let mut output_shape = (
             input_shape.0,
@@ -83,6 +92,8 @@ impl DepthwiseConvolutionalLayer {
             input_shape,
             output_shape,
             kernels,
+            use_bias,
+            biases,
             input: Array4::zeros((0, 0, 0, 0)),
             padding,
         }
@@ -96,6 +107,9 @@ impl DepthwiseConvolutionalLayer {
     pub fn backward_propagate(&mut self, error: Array4<f64>, lr: f64) -> Array4<f64> {
         let next_error = self.calculate_next_err(&error);
         self.kernels -= &(self.calculate_delta_k(&error) * lr);
+        if self.use_bias {
+            self.biases -= &(self.calculate_delta_b(&error) * lr);
+        }
         next_error
     }
 
@@ -137,7 +151,8 @@ impl DepthwiseConvolutionalLayer {
                             r..r + self.kernel_shape.1,
                             c..c + self.kernel_shape.2
                         ]) * &self.kernels.slice(s![f, .., ..]))
-                            .sum();
+                            .sum()
+                            + self.biases[[f]];
                     });
             });
         output
@@ -241,5 +256,14 @@ impl DepthwiseConvolutionalLayer {
             });
 
         kernel_grads.mean_axis(Axis(0)).unwrap()
+    }
+
+    fn calculate_delta_b(&self, err: &Array4<f64>) -> Array1<f64> {
+        err.mean_axis(Axis(0))
+            .unwrap()
+            .mean_axis(Axis(1))
+            .unwrap()
+            .mean_axis(Axis(1))
+            .unwrap()
     }
 }

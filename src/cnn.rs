@@ -145,6 +145,7 @@ impl CNN {
         filters: usize,
         kernel_size: usize,
         strides: usize,
+        bias: Option<f64>,
         add_padding: bool,
     ) {
         if strides == 0 {
@@ -198,6 +199,7 @@ impl CNN {
             kernel_size,
             strides,
             input_shape,
+            bias,
             add_padding,
         )));
     }
@@ -266,8 +268,14 @@ impl CNN {
 
         // Expansion
         if factor != 1 {
-            let layer =
-                ConvolutionalLayer::new(input_filters * factor, 1, 1, input_shape, add_padding);
+            let layer = ConvolutionalLayer::new(
+                input_filters * factor,
+                1,
+                1,
+                input_shape,
+                None,
+                add_padding,
+            );
             input_shape = layer.output_shape();
             self.add_layer(LayerType::Convolutional(layer));
             self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
@@ -276,7 +284,7 @@ impl CNN {
 
         // Depthwise Convolution
         let layer =
-            DepthwiseConvolutionalLayer::new(kernel_size, strides, input_shape, add_padding);
+            DepthwiseConvolutionalLayer::new(kernel_size, strides, input_shape, None, add_padding);
         input_shape = layer.output_shape();
         self.add_layer(LayerType::DepthwiseConv(layer));
         self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
@@ -292,38 +300,46 @@ impl CNN {
             )));
 
             let layer = GlobalAvgPoolingLayer::new(input_shape);
-            let mut se_input_shape = layer.output_shape();
+            let reshape_input_shape = layer.output_shape();
             self.add_layer(LayerType::GlobalAvgPooling(layer));
 
-            let layer = DenseLayer::new(se_input_shape, reduced_filters, 0.);
-            se_input_shape = layer.output_shape();
-            self.add_layer(LayerType::Dense(layer));
-            self.add_activation_layer(Activation::SiLU);
-
-            let layer = DenseLayer::new(se_input_shape, input_filters * factor, 0.);
-            se_input_shape = layer.output_shape();
-            self.add_layer(LayerType::Dense(layer));
-            self.add_activation_layer(Activation::SiLU);
-
-            let target_shape = (se_input_shape.0, se_input_shape.1, 1, 1);
-            let layer = ReshapeLayer::new(se_input_shape, target_shape, false);
-            let se_input_shape = layer.output_shape();
+            let target_shape = (reshape_input_shape.0, reshape_input_shape.1, 1, 1);
+            let layer = ReshapeLayer::new(reshape_input_shape, target_shape, false);
+            let mut se_input_shape = layer.output_shape();
             self.add_layer(LayerType::Reshape(layer));
+
+            let layer =
+                ConvolutionalLayer::new(reduced_filters, 1, 1, se_input_shape, Some(0.), true);
+            se_input_shape = layer.output_shape();
+            self.add_layer(LayerType::Convolutional(layer));
+            self.add_activation_layer(Activation::SiLU);
+
+            let layer = ConvolutionalLayer::new(
+                input_filters * factor,
+                1,
+                1,
+                se_input_shape,
+                Some(0.),
+                true,
+            );
+            se_input_shape = layer.output_shape();
+            self.add_layer(LayerType::Convolutional(layer));
+            self.add_activation_layer(Activation::Sigmoid);
 
             self.add_layer(LayerType::Operation(OperationLayer::new(
                 mul_id,
                 vec![
                     se_input_shape.0,
                     se_input_shape.1,
-                    se_input_shape.2,
-                    se_input_shape.3,
+                    input_shape.2,
+                    input_shape.3,
                 ],
                 OperationType::Mul,
             )));
         }
 
         // Output
-        let layer = ConvolutionalLayer::new(filters, 1, 1, input_shape, add_padding);
+        let layer = ConvolutionalLayer::new(filters, 1, 1, input_shape, None, add_padding);
         input_shape = layer.output_shape();
         self.add_layer(LayerType::Convolutional(layer));
         self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
