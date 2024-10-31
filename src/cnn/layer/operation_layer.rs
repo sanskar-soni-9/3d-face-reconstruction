@@ -113,9 +113,17 @@ impl OperationLayer {
     where
         D: Dimension,
     {
-        let next_error = &error * &cache.skip_actvns;
-        cache.skip_actvns = &error * &cache.main_actvns;
-        (next_error, cache)
+        match self.operation {
+            OperationType::Add => {
+                cache.skip_actvns = error.clone();
+                (error, cache)
+            }
+            OperationType::Mul => {
+                let next_error = &error * &cache.skip_actvns;
+                cache.skip_actvns = &error * &cache.main_actvns;
+                (next_error, cache)
+            }
+        }
     }
 
     fn add<D>(&self, a: &Array<f64, D>, b: &Array<f64, D>) -> Array<f64, D>
