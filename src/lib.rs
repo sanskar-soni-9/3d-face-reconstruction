@@ -92,7 +92,7 @@ pub fn get_ndimages(image_paths: &[String]) -> Vec<Array3<f64>> {
 
 fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
     let mut cnn = cnn::CNN::new(MINI_BATCH_SIZE, epochs, images, DEFAULT_LEARNING_RATE);
-    cnn.add_convolutional_layer(32, 3, 2, true);
+    cnn.add_convolutional_layer(32, 3, 2, None, true);
     cnn.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
     cnn.add_activation_layer(Activation::SiLU);
 
@@ -119,14 +119,12 @@ fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
 
     cnn.add_mbconv_layer(6, 320, 3, 1, 0.25, true);
 
-    cnn.add_convolutional_layer(1280, 1, 1, true);
+    cnn.add_convolutional_layer(1280, 1, 1, None, true);
     cnn.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
     cnn.add_activation_layer(Activation::SiLU);
 
     cnn.add_global_avg_pooling_layer();
 
     cnn.add_dense_layer(CNN_OUTPUT_SIZE, 0.0);
-    cnn.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
-    cnn.add_activation_layer(Activation::SiLU);
     cnn
 }
