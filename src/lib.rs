@@ -1,7 +1,7 @@
 use cnn::{activation::Activation, CNN};
 use config::{
-    BATCH_EPSILON, CNN_OUTPUT_SIZE, DEFAULT_LEARNING_RATE, INPUT_SHAPE, MINI_BATCH_SIZE,
-    NORM_MOMENTUM, OUTPUT_DIR,
+    BATCH_EPSILON, CNN_OUTPUT_SIZE, DEFAULT_LEARNING_RATE, DROPOUT_RATE, INPUT_SHAPE,
+    MINI_BATCH_SIZE, NORM_MOMENTUM, OUTPUT_DIR, SE_RATIO,
 };
 use dataset::Dataset;
 use image::{imageops::FilterType, DynamicImage, GenericImage, GenericImageView, Rgba};
@@ -96,35 +96,35 @@ fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
     cnn.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
     cnn.add_activation_layer(Activation::SiLU);
 
-    cnn.add_mbconv_layer(1, 16, 3, 1, 0.25, true);
+    cnn.add_mbconv_layer(1, 16, 3, 1, SE_RATIO, DROPOUT_RATE, true);
 
-    cnn.add_mbconv_layer(6, 24, 3, 1, 0.25, true);
-    cnn.add_mbconv_layer(6, 24, 3, 2, 0.25, true);
+    cnn.add_mbconv_layer(6, 24, 3, 1, SE_RATIO, DROPOUT_RATE, true);
+    cnn.add_mbconv_layer(6, 24, 3, 2, SE_RATIO, DROPOUT_RATE, true);
 
-    cnn.add_mbconv_layer(6, 40, 5, 1, 0.25, true);
-    cnn.add_mbconv_layer(6, 40, 5, 2, 0.25, true);
+    cnn.add_mbconv_layer(6, 40, 5, 1, SE_RATIO, DROPOUT_RATE, true);
+    cnn.add_mbconv_layer(6, 40, 5, 2, SE_RATIO, DROPOUT_RATE, true);
 
-    cnn.add_mbconv_layer(6, 80, 3, 1, 0.25, true);
-    cnn.add_mbconv_layer(6, 80, 3, 1, 0.25, true);
-    cnn.add_mbconv_layer(6, 80, 3, 2, 0.25, true);
+    cnn.add_mbconv_layer(6, 80, 3, 1, SE_RATIO, DROPOUT_RATE, true);
+    cnn.add_mbconv_layer(6, 80, 3, 1, SE_RATIO, DROPOUT_RATE, true);
+    cnn.add_mbconv_layer(6, 80, 3, 2, SE_RATIO, DROPOUT_RATE, true);
 
-    cnn.add_mbconv_layer(6, 112, 5, 1, 0.25, true);
-    cnn.add_mbconv_layer(6, 112, 5, 1, 0.25, true);
-    cnn.add_mbconv_layer(6, 112, 5, 1, 0.25, true);
+    cnn.add_mbconv_layer(6, 112, 5, 1, SE_RATIO, DROPOUT_RATE, true);
+    cnn.add_mbconv_layer(6, 112, 5, 1, SE_RATIO, DROPOUT_RATE, true);
+    cnn.add_mbconv_layer(6, 112, 5, 1, SE_RATIO, DROPOUT_RATE, true);
 
-    cnn.add_mbconv_layer(6, 192, 5, 1, 0.25, true);
-    cnn.add_mbconv_layer(6, 192, 5, 1, 0.25, true);
-    cnn.add_mbconv_layer(6, 192, 5, 1, 0.25, true);
-    cnn.add_mbconv_layer(6, 192, 5, 2, 0.25, true);
+    cnn.add_mbconv_layer(6, 192, 5, 1, SE_RATIO, DROPOUT_RATE, true);
+    cnn.add_mbconv_layer(6, 192, 5, 1, SE_RATIO, DROPOUT_RATE, true);
+    cnn.add_mbconv_layer(6, 192, 5, 1, SE_RATIO, DROPOUT_RATE, true);
+    cnn.add_mbconv_layer(6, 192, 5, 2, SE_RATIO, DROPOUT_RATE, true);
 
-    cnn.add_mbconv_layer(6, 320, 3, 1, 0.25, true);
+    cnn.add_mbconv_layer(6, 320, 3, 1, SE_RATIO, DROPOUT_RATE, true);
 
     cnn.add_convolutional_layer(1280, 1, 1, None, true);
     cnn.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
     cnn.add_activation_layer(Activation::SiLU);
 
     cnn.add_global_avg_pooling_layer();
-
-    cnn.add_dense_layer(CNN_OUTPUT_SIZE, 0.0);
+    cnn.add_dropout_layer(DROPOUT_RATE);
+    cnn.add_dense_layer(CNN_OUTPUT_SIZE, 0.);
     cnn
 }
