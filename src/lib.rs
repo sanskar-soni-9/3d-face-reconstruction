@@ -38,18 +38,9 @@ pub fn infer(model: &str, image_paths: Vec<String>) {
 
 pub fn train(model: Option<&str>, data: Dataset, epochs: usize, lr: Option<&str>) {
     let mut images = vec![];
-    let mut count = 80;
-    for label in data.labels.iter() {
-        // Temporary
-        if count == 0 {
-            break;
-        }
+    // Temporary
+    for label in data.labels.iter().take(80) {
         let image = image_to_ndimage(get_image(label.image_path()));
-        // TODO: Some images are zeros?
-        if image.sum() == 0.0 {
-            continue;
-        }
-        count -= 1;
         images.push(image);
     }
 
@@ -124,7 +115,9 @@ fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
     cnn.add_activation_layer(Activation::SiLU);
 
     cnn.add_global_avg_pooling_layer();
-    cnn.add_dropout_layer(DROPOUT_RATE);
+    if DROPOUT_RATE > 0. {
+        cnn.add_dropout_layer(DROPOUT_RATE);
+    }
     cnn.add_dense_layer(CNN_OUTPUT_SIZE, 0.);
     cnn
 }

@@ -11,6 +11,7 @@ use layer::{
     max_pooling_layer::*, operation_layer::*, reshape_layer::*, LayerType,
 };
 use ndarray::{s, Array1, Array2, Array3, Array4, Dim};
+use rand::seq::SliceRandom;
 use rand_distr::num_traits::Zero;
 use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
@@ -624,26 +625,31 @@ impl CNN {
 
     pub fn train(&mut self, labels: Vec<Labels>) {
         for e in self.cur_epoch..self.epochs {
-            for batch in (0..labels.len())
-                .take(self.data.len())
-                .step_by(self.mini_batch_size)
-            {
-                if batch + self.mini_batch_size >= self.data.len() {
-                    break;
-                }
-
+            let mut rng = rand::thread_rng();
+            let mut shuffled_batch: Vec<_> = (0..self.data.len()).collect();
+            shuffled_batch.shuffle(&mut rng);
+            for batch in shuffled_batch.chunks(self.mini_batch_size) {
                 let mut input: Array4<f64> = Array4::zeros((
                     self.mini_batch_size,
                     INPUT_SHAPE.0,
                     INPUT_SHAPE.1,
                     INPUT_SHAPE.2,
                 ));
-                let mut training_labels: Vec<Array1<f64>> = vec![];
-                for j in 0..self.mini_batch_size {
+                let mut training_labels: Vec<Array1<f64>> =
+                    Vec::with_capacity(self.mini_batch_size);
+
+                for (batch_i, data_i) in batch.iter().enumerate() {
                     input
-                        .slice_mut(s![j, .., .., ..])
-                        .assign(&self.data[batch + j]);
-                    training_labels.push(self.prepare_training_labels(&labels[batch + j]));
+                        .slice_mut(s![batch_i, .., .., ..])
+                        .assign(&self.data[*data_i]);
+                    training_labels.push(self.prepare_training_labels(&labels[*data_i]));
+                }
+                for pad_i in batch.len()..self.mini_batch_size {
+                    let data_i = shuffled_batch.choose(&mut rng).unwrap();
+                    input
+                        .slice_mut(s![pad_i, .., .., ..])
+                        .assign(&self.data[*data_i]);
+                    training_labels.push(self.prepare_training_labels(&labels[*data_i]));
                 }
 
                 let start_time = std::time::SystemTime::now();
