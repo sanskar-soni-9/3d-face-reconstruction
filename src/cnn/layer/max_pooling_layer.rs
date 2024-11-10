@@ -50,6 +50,9 @@ impl MaxPoolingLayer {
             .outer_iter_mut()
             .enumerate()
             .for_each(|(idx, mut op)| {
+                self.max_indices.push(Vec::with_capacity(
+                    self.output_shape.2 * self.output_shape.3,
+                ));
                 for ((f, y, x), output_val) in op.indexed_iter_mut() {
                     let mut max_index = (f, x, y, x, y);
                     for ky in 0..self.kernel_size {
