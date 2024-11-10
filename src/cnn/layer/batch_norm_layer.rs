@@ -11,7 +11,6 @@ pub struct BatchNormLayer {
     momentum: f64,
     moving_mean: Array1<f64>,
     moving_variance: Array1<f64>,
-    reduced_axes: Vec<usize>,
 }
 
 pub struct BNCache<D>
@@ -27,7 +26,6 @@ where
 impl BatchNormLayer {
     pub fn new(axis: usize, epsilon: f64, input_shape: Vec<usize>, momentum: f64) -> Self {
         let axis_size = input_shape[axis];
-        let reduced_axes: Vec<usize> = (0..input_shape.len()).filter(|&x| x != axis).collect();
         BatchNormLayer {
             axis,
             beta: Array1::zeros(axis_size),
@@ -37,7 +35,6 @@ impl BatchNormLayer {
             momentum,
             moving_mean: Array1::zeros(axis_size),
             moving_variance: Array1::zeros(axis_size),
-            reduced_axes,
         }
     }
 
@@ -55,9 +52,9 @@ impl BatchNormLayer {
         D: RemoveAxis,
     {
         if is_training {
-            let mean = self.mean_reduced_axes(activations.clone(), &self.reduced_axes);
+            let mean = self.mean_reduced_axes(activations.clone(), self.axis);
             let xmu = activations - &mean;
-            let var = self.mean_reduced_axes(xmu.powi(2), &self.reduced_axes);
+            let var = self.mean_reduced_axes(xmu.powi(2), self.axis);
             let var_ep = &var + self.epsilon;
             let var_inv = 1. / var_ep.sqrt();
             let xhat = &xmu * &var_inv;
@@ -99,23 +96,23 @@ impl BatchNormLayer {
     where
         D: Dimension + RemoveAxis,
     {
-        let m = self.get_reduction_size(error.shape(), &self.reduced_axes) as f64;
+        let m = self.get_reduction_size(error.shape(), self.axis) as f64;
 
         let d_xhat: Array<f64, D> =
             self.mul_along_axis_with_1dim(error.clone(), &self.gamma, self.axis);
 
         let d_var: Array<f64, D> = &d_xhat * &cache.xmu * &(cache.var.powf(-3. / 2.) * -0.5);
-        let d_var = self.sum_reduced_axes(d_var, &self.reduced_axes);
+        let d_var = self.sum_reduced_axes(d_var, self.axis);
 
-        let d_mu = self.sum_reduced_axes(&d_xhat * &(-1. * &cache.var_inv), &self.reduced_axes)
-            + &d_var * self.mean_reduced_axes(-2. * &cache.xmu, &self.reduced_axes);
+        let d_mu = self.sum_reduced_axes(&d_xhat * &(-1. * &cache.var_inv), self.axis)
+            + &d_var * self.mean_reduced_axes(-2. * &cache.xmu, self.axis);
 
         let d_x = d_xhat * &cache.var_inv + &d_var * 2. * &cache.xmu / m + &d_mu / m;
 
-        let d_gamma = self.sum_reduced_axes(&error * &cache.xhat, &self.reduced_axes);
+        let d_gamma = self.sum_reduced_axes(&error * &cache.xhat, self.axis);
         self.update_gamma(&d_gamma, lr);
 
-        let d_beta = self.sum_reduced_axes(error, &self.reduced_axes);
+        let d_beta = self.sum_reduced_axes(error, self.axis);
         self.update_beta(&d_beta, lr);
 
         d_x
@@ -200,30 +197,27 @@ impl BatchNormLayer {
         m1
     }
 
-    fn get_reduction_size(&self, shape: &[usize], reduction_axes: &[usize]) -> usize {
-        reduction_axes.iter().map(|ax| shape[*ax]).product()
+    fn get_reduction_size(&self, shape: &[usize], axis: usize) -> usize {
+        shape.iter().product::<usize>() / shape[axis]
     }
 
-    fn mean_reduced_axes<D>(&self, mtrx: Array<f64, D>, reduction_axes: &[usize]) -> Array<f64, D>
+    fn mean_reduced_axes<D>(&self, mtrx: Array<f64, D>, axis: usize) -> Array<f64, D>
     where
         D: Dimension + RemoveAxis,
     {
-        let total_elements: usize = self.get_reduction_size(mtrx.shape(), reduction_axes);
-        self.sum_reduced_axes(mtrx, reduction_axes) / total_elements as f64
+        let total_elements = self.get_reduction_size(mtrx.shape(), axis) as f64;
+        self.sum_reduced_axes(mtrx, axis) / total_elements
     }
 
-    fn sum_reduced_axes<D>(
-        &self,
-        mut mtrx: Array<f64, D>,
-        reduction_axes: &[usize],
-    ) -> Array<f64, D>
+    fn sum_reduced_axes<D>(&self, mut mtrx: Array<f64, D>, axis: usize) -> Array<f64, D>
     where
         D: Dimension + RemoveAxis,
     {
-        for &axis in reduction_axes.iter() {
-            let sum = mtrx.sum_axis(Axis(axis)).insert_axis(Axis(axis));
-            mtrx = sum.broadcast(mtrx.raw_dim()).unwrap().to_owned();
-        }
+        mtrx.axis_iter_mut(Axis(axis))
+            .par_bridge()
+            .for_each(|mut ax| {
+                ax.assign(&(&ax * 0. + ax.sum()));
+            });
         mtrx
     }
 }
