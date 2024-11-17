@@ -469,7 +469,7 @@ impl CNN {
         )));
     }
 
-    pub fn add_max_pooling_layer(&mut self, kernel_size: usize, strides: usize) {
+    pub fn add_max_pooling_layer(&mut self, kernel_size: usize, strides: usize, add_padding: bool) {
         let error_msg = "Add max pooling layer after a convolutional or max pooling layer.";
         if strides == 0 {
             panic!("Stride should be greater than 0.");
@@ -520,6 +520,7 @@ impl CNN {
             kernel_size,
             output_shape,
             strides,
+            add_padding,
         )));
     }
 
@@ -738,7 +739,7 @@ impl CNN {
                     flatten_input = avg_pooling_layer.forward_propagate(&input, is_training);
                 }
                 LayerType::MaxPooling(max_pooling_layer) => {
-                    input = max_pooling_layer.forward_propagate(&input, is_training);
+                    input = max_pooling_layer.forward_propagate(input, is_training);
                 }
                 LayerType::Operand(operand_layer) => {
                     let id = operand_layer.id();
