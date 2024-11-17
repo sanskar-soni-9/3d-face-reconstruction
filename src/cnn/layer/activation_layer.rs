@@ -29,9 +29,7 @@ impl ActivationLayer {
     {
         self.input = input.flatten_with_order(Order::RowMajor).to_owned();
         let mut output = input.to_owned();
-        output
-            .par_iter_mut()
-            .for_each(|inp| *inp = self.activation.activate(*inp));
+        output.par_mapv_inplace(|out| self.activation.activate(out));
         output
     }
 

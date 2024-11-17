@@ -5,11 +5,7 @@ use crate::config::{
 use crate::dataset::Labels;
 use activation::Activation;
 use cache::CNNCache;
-use layer::{
-    activation_layer::*, batch_norm_layer::*, convolutional_layer::*, dense_layer::*,
-    depthwise_conv_layer::*, dropout_layer::*, flatten_layer::*, global_avg_pooling_layer::*,
-    max_pooling_layer::*, operation_layer::*, reshape_layer::*, LayerType,
-};
+use layer::*;
 use ndarray::{s, Array1, Array2, Array3, Array4, Dim};
 use rand::seq::SliceRandom;
 use rand_distr::num_traits::Zero;
@@ -440,6 +436,7 @@ impl CNN {
                     }
                 }
                 LayerType::Convolutional(layer) => layer.output_shape(),
+                LayerType::DepthwiseConv(layer) => layer.output_shape(),
                 LayerType::Dropout(layer) => {
                     let shape = layer.input_shape();
                     if shape.len() == 4 {

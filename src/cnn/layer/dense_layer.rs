@@ -59,19 +59,19 @@ impl DenseLayer {
             .enumerate()
             .par_bridge()
             .for_each(|(op_i, mut op)| {
-                op.indexed_iter_mut().par_bridge().for_each(|(i, val)| {
+                op.indexed_iter_mut().par_bridge().for_each(|(val_i, val)| {
                     *val = self
                         .weights
-                        .slice(s![i, ..])
+                        .slice(s![val_i, ..])
                         .dot(&input.slice(s![op_i, ..]))
-                        + self.biases[[i]];
+                        + self.biases[[val_i]];
                 });
             });
         output
     }
 
     fn calculate_next_err(&self, err: &Array2<f64>) -> Array2<f64> {
-        let mut next_error: Array2<f64> = Array2::zeros(self.input.raw_dim());
+        let mut next_error = Array2::zeros(self.input.raw_dim());
         next_error
             .outer_iter_mut()
             .zip(err.outer_iter())
@@ -93,7 +93,6 @@ impl DenseLayer {
             self.weights.shape()[0],
             self.weights.shape()[1],
         ));
-
         weight_grads
             .outer_iter_mut()
             .enumerate()
@@ -104,12 +103,11 @@ impl DenseLayer {
                     .enumerate()
                     .par_bridge()
                     .for_each(|(row_i, mut row)| {
-                        row.indexed_iter_mut().for_each(|(col_i, col)| {
-                            *col = err[[wei_i, row_i]] * self.input[[wei_i, col_i]]
-                        })
+                        let row_err = err[[wei_i, row_i]];
+                        row.indexed_iter_mut()
+                            .for_each(|(col_i, col)| *col = self.input[[wei_i, col_i]] * row_err)
                     });
             });
-
         weight_grads.mean_axis(Axis(0)).unwrap()
     }
 }
