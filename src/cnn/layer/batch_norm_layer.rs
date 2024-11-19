@@ -1,4 +1,4 @@
-use ndarray::{Array, Array1, Axis, Dim, Dimension, RemoveAxis};
+use ndarray::{aview0, Array, Array1, Axis, Dim, Dimension, RemoveAxis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -96,7 +96,7 @@ impl BatchNormLayer {
     where
         D: Dimension + RemoveAxis,
     {
-        let m = self.get_reduction_size(error.shape(), self.axis) as f64;
+        let m = error.shape()[self.axis] as f64;
 
         let d_xhat: Array<f64, D> =
             self.mul_along_axis_with_1dim(error.clone(), &self.gamma, self.axis);
@@ -197,27 +197,23 @@ impl BatchNormLayer {
         m1
     }
 
-    fn get_reduction_size(&self, shape: &[usize], axis: usize) -> usize {
-        shape.iter().product::<usize>() / shape[axis]
-    }
-
     fn mean_reduced_axes<D>(&self, mtrx: Array<f64, D>, axis: usize) -> Array<f64, D>
     where
         D: Dimension + RemoveAxis,
     {
-        let total_elements = self.get_reduction_size(mtrx.shape(), axis) as f64;
-        self.sum_reduced_axes(mtrx, axis) / total_elements
+        let length = mtrx.shape()[axis] as f64;
+        self.sum_reduced_axes(mtrx, axis) / aview0(&length)
     }
 
     fn sum_reduced_axes<D>(&self, mut mtrx: Array<f64, D>, axis: usize) -> Array<f64, D>
     where
         D: Dimension + RemoveAxis,
     {
-        mtrx.axis_iter_mut(Axis(axis))
-            .par_bridge()
-            .for_each(|mut ax| {
-                ax.assign(&(&ax * 0. + ax.sum()));
-            });
+        let sum = mtrx.sum_axis(Axis(axis));
+
+        for mut axis in mtrx.axis_iter_mut(Axis(axis)) {
+            axis.assign(&sum);
+        }
         mtrx
     }
 }
