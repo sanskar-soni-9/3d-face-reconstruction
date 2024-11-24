@@ -40,7 +40,7 @@ impl CNNCache {
         self.bn4d_store.pop()
     }
 
-    // LayerCache
+    // OperandCache
     pub fn add_operand2d(&mut self, id: usize, value: Layer2) {
         self.operand2d_store.insert(id, value);
     }

@@ -4,8 +4,17 @@ pub struct OperandCache<D>
 where
     D: Dimension,
 {
-    main_actvns: Array<f64, D>, // Main branch
-    skip_actvns: Array<f64, D>, // Skip branch
+    pub main_actvns: Array<f64, D>, // Main branch
+    pub skip_actvns: Array<f64, D>, // Skip branch
+}
+
+impl<D> OperandCache<D>
+where
+    D: Dimension,
+{
+    pub fn update_skip(&mut self, skip_actvns: Array<f64, D>) {
+        self.skip_actvns = skip_actvns;
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]

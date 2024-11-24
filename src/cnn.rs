@@ -10,22 +10,28 @@ use ndarray::{s, Array1, Array2, Array3, Array4, Dim};
 use rand::seq::SliceRandom;
 use rand_distr::num_traits::Zero;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::io::{Read, Write};
 
 pub mod activation;
 mod cache;
 mod layer;
 
+enum Tensor {
+    Tensor4d(Array4<f64>),
+    Tensor2d(Array2<f64>),
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct CNN {
     mini_batch_size: usize,
     layers: Vec<LayerType>,
+    skip_layers: HashMap<usize, Vec<LayerType>>,
     epochs: usize,
     cur_epoch: usize,
     #[serde(skip)]
     data: Vec<Array3<f64>>,
     #[serde(skip)]
-    store: CNNCache,
     lr: f64,
 }
 
@@ -34,10 +40,10 @@ impl CNN {
         CNN {
             mini_batch_size,
             layers: vec![],
+            skip_layers: HashMap::default(),
             epochs,
             cur_epoch: 0,
             data: inputs,
-            store: CNNCache::default(),
             lr,
         }
     }
@@ -48,9 +54,16 @@ impl CNN {
         input
             .slice_mut(s![0, .., .., ..])
             .assign(&self.data[img_num]);
-        self.forward_propagate(input, false)
-            .slice(s![0, ..])
-            .to_owned()
+
+        Self::forward_propagate(
+            Tensor::Tensor4d(input),
+            &mut self.layers,
+            Some(&mut self.skip_layers),
+            false,
+        )
+        .1
+        .slice(s![0, ..])
+        .to_owned()
     }
 
     pub fn add_activation_layer(&mut self, activation: Activation) {
@@ -651,7 +664,12 @@ impl CNN {
                 }
 
                 let start_time = std::time::SystemTime::now();
-                let prediction = self.forward_propagate(input, true);
+                let (_, prediction, mut store) = Self::forward_propagate(
+                    Tensor::Tensor4d(input),
+                    &mut self.layers,
+                    Some(&mut self.skip_layers),
+                    true,
+                );
                 let forward_time = std::time::SystemTime::now();
                 println!(
                     "\nFORWARD TOOK: {:?}\n",
@@ -665,13 +683,18 @@ impl CNN {
                     .for_each(|(idx, mut err)| {
                         err.assign(&(&prediction.slice(s![idx, ..]) - &training_labels[idx]));
                     });
-
                 println!("PREDICTION: {:?}\nERROR: {:?}\n", prediction, error);
 
-                self.backward_propagate(error);
+                Self::backward_propagate(
+                    Tensor::Tensor2d(error),
+                    &mut self.layers,
+                    Some(&mut self.skip_layers),
+                    Some(&mut store),
+                    self.lr,
+                );
                 let backward_time = std::time::SystemTime::now();
                 println!(
-                    "BACKWARD TOOK: {:?}\n\nIMAGE TOOK: {:?}\n",
+                    "BACKWARD TOOK: {:?}\nIMAGE TOOK: {:?}\n",
                     backward_time.duration_since(forward_time),
                     backward_time.duration_since(start_time)
                 );
@@ -682,12 +705,21 @@ impl CNN {
         }
     }
 
-    fn forward_propagate(&mut self, mut input: Array4<f64>, is_training: bool) -> Array2<f64> {
+    fn forward_propagate(
+        input: Tensor,
+        layers: &mut [LayerType],
+        mut skip_layers: Option<&mut HashMap<usize, Vec<LayerType>>>,
+        is_training: bool,
+    ) -> (Array4<f64>, Array2<f64>, CNNCache) {
         let cache_err = "No cache found for backpropagation calculations.";
-        self.store.clear();
-        let mut flatten_input: Array2<f64> = Array2::zeros((0, 0));
+        let mut store = CNNCache::default();
 
-        for layer in self.layers.iter_mut() {
+        let (mut input, mut flatten_input) = match input {
+            Tensor::Tensor4d(input) => (input, Array2::default((0, 0))),
+            Tensor::Tensor2d(flatten_input) => (Array4::default((0, 0, 0, 0)), flatten_input),
+        };
+
+        for layer in layers.iter_mut() {
             match layer {
                 LayerType::Activation(activation_layer) => {
                     if activation_layer.input_shape().len() == 2 {
@@ -703,13 +735,13 @@ impl CNN {
                         (flatten_input, cache) =
                             batchnorm_layer.forward_propagate(flatten_input, is_training);
                         if let Some(cache) = cache {
-                            self.store.add_bn2(cache);
+                            store.add_bn2(cache);
                         }
                     } else {
                         let cache: Option<BNCache<Dim<[usize; 4]>>>;
                         (input, cache) = batchnorm_layer.forward_propagate(input, is_training);
                         if let Some(cache) = cache {
-                            self.store.add_bn4(cache);
+                            store.add_bn4(cache);
                         }
                     }
                 }
@@ -741,28 +773,50 @@ impl CNN {
                 LayerType::Operand(operand_layer) => {
                     let id = operand_layer.id();
                     if operand_layer.input_shape().len() == 2 {
-                        let cache: OperandCache<Dim<[usize; 2]>>;
+                        let mut cache: OperandCache<Dim<[usize; 2]>>;
                         (flatten_input, cache) =
                             operand_layer.forward_propagate(flatten_input, is_training);
-                        self.store.add_operand2d(id, cache);
+                        if let Some(ref mut skip_layers) = skip_layers {
+                            if let Some(skip_layers) = skip_layers.get_mut(&id) {
+                                let (_, skip_actvns, _) = Self::forward_propagate(
+                                    Tensor::Tensor2d(flatten_input.clone()),
+                                    skip_layers,
+                                    None,
+                                    is_training,
+                                );
+                                cache.update_skip(skip_actvns);
+                            }
+                        }
+                        store.add_operand2d(id, cache);
                     } else {
-                        let cache: OperandCache<Dim<[usize; 4]>>;
+                        let mut cache: OperandCache<Dim<[usize; 4]>>;
                         (input, cache) = operand_layer.forward_propagate(input, is_training);
-                        self.store.add_operand4d(id, cache);
+                        if let Some(ref mut skip_layers) = skip_layers {
+                            if let Some(skip_layers) = skip_layers.get_mut(&id) {
+                                let (skip_actvns, _, _) = Self::forward_propagate(
+                                    Tensor::Tensor4d(input.clone()),
+                                    skip_layers,
+                                    None,
+                                    is_training,
+                                );
+                                cache.update_skip(skip_actvns);
+                            }
+                        }
+                        store.add_operand4d(id, cache);
                     }
                 }
                 LayerType::Operation(operation_layer) => {
                     let id = operation_layer.operand_id();
                     if operation_layer.input_shape().len() == 2 {
-                        let (id, mut cache) = self.store.consume_operand2d(id).expect(cache_err);
+                        let (id, mut cache) = store.consume_operand2d(id).expect(cache_err);
                         (flatten_input, cache) =
                             operation_layer.forward_propagate(flatten_input, cache, is_training);
-                        self.store.add_operand2d(id, cache);
+                        store.add_operand2d(id, cache);
                     } else {
-                        let (id, mut cache) = self.store.consume_operand4d(id).expect(cache_err);
+                        let (id, mut cache) = store.consume_operand4d(id).expect(cache_err);
                         (input, cache) =
                             operation_layer.forward_propagate(input, cache, is_training);
-                        self.store.add_operand4d(id, cache);
+                        store.add_operand4d(id, cache);
                     }
                 }
                 LayerType::Reshape(reshape_layer) => {
@@ -770,46 +824,54 @@ impl CNN {
                 }
             };
         }
-        flatten_input
+        (input, flatten_input, store)
     }
 
-    fn backward_propagate(&mut self, mut error: Array2<f64>) {
+    fn backward_propagate(
+        error: Tensor,
+        layers: &mut [LayerType],
+        mut skip_layers: Option<&mut HashMap<usize, Vec<LayerType>>>,
+        mut store: Option<&mut CNNCache>,
+        lr: f64,
+    ) -> (Array2<f64>, Array4<f64>) {
         let cache_err = "No cache found for backpropagation calculations.";
-        let mut shaped_error: Array4<f64> = Array4::zeros((0, 0, 0, 0));
+        let (mut shaped_error, mut error) = match error {
+            Tensor::Tensor4d(shaped_error) => (shaped_error, Array2::default((0, 0))),
+            Tensor::Tensor2d(error) => (Array4::default((0, 0, 0, 0)), error),
+        };
 
-        for layer in self.layers.iter_mut().rev() {
+        for layer in layers.iter_mut().rev() {
             match layer {
                 LayerType::Activation(activation_layer) => {
                     if activation_layer.input_shape().len() == 2 {
-                        error = activation_layer.backward_propagate(error, self.lr);
+                        error = activation_layer.backward_propagate(error, lr);
                     } else {
-                        shaped_error = activation_layer.backward_propagate(shaped_error, self.lr);
+                        shaped_error = activation_layer.backward_propagate(shaped_error, lr);
                     }
                 }
                 LayerType::BatchNorm(batchnorm_layer) => {
                     if batchnorm_layer.input_shape().len() == 2 {
-                        let cache = self.store.consume_bn2().expect(cache_err);
-                        error = batchnorm_layer.backward_propagate(error, cache, self.lr);
+                        let cache = store.as_mut().unwrap().consume_bn2().expect(cache_err);
+                        error = batchnorm_layer.backward_propagate(error, cache, lr);
                     } else {
-                        let cache = self.store.consume_bn4().expect(cache_err);
-                        shaped_error =
-                            batchnorm_layer.backward_propagate(shaped_error, cache, self.lr);
+                        let cache = store.as_mut().unwrap().consume_bn4().expect(cache_err);
+                        shaped_error = batchnorm_layer.backward_propagate(shaped_error, cache, lr);
                     }
                 }
                 LayerType::Convolutional(convolutional_layer) => {
-                    shaped_error = convolutional_layer.backward_propagate(shaped_error, self.lr);
+                    shaped_error = convolutional_layer.backward_propagate(shaped_error, lr);
                 }
                 LayerType::Dense(dense_layer) => {
-                    error = dense_layer.backward_propagate(error, self.lr);
+                    error = dense_layer.backward_propagate(error, lr);
                 }
                 LayerType::DepthwiseConv(depthwise_conv_layer) => {
-                    shaped_error = depthwise_conv_layer.backward_propagate(shaped_error, self.lr);
+                    shaped_error = depthwise_conv_layer.backward_propagate(shaped_error, lr);
                 }
                 LayerType::Dropout(dropout_layer) => {
                     if dropout_layer.input_shape().len() == 2 {
-                        error = dropout_layer.backward_propagate(error, self.lr);
+                        error = dropout_layer.backward_propagate(error, lr);
                     } else {
-                        shaped_error = dropout_layer.backward_propagate(shaped_error, self.lr);
+                        shaped_error = dropout_layer.backward_propagate(shaped_error, lr);
                     }
                 }
                 LayerType::Flatten(flatten_layer) => {
@@ -824,34 +886,70 @@ impl CNN {
                 LayerType::Operand(operand_layer) => {
                     let operand_id = operand_layer.id();
                     if operand_layer.input_shape().len() == 2 {
-                        let (_, cache) = self.store.consume_operand2d(operand_id).expect(cache_err);
-                        error = operand_layer.backward_propagate(error, cache, self.lr);
+                        let (_, mut cache) = store
+                            .as_mut()
+                            .unwrap()
+                            .consume_operand2d(operand_id)
+                            .expect(cache_err);
+                        if let Some(ref mut skip_layers) = skip_layers {
+                            if let Some(skip_layers) = skip_layers.get_mut(&operand_id) {
+                                (cache.skip_actvns, _) = Self::backward_propagate(
+                                    Tensor::Tensor2d(cache.skip_actvns),
+                                    skip_layers,
+                                    None,
+                                    None,
+                                    lr,
+                                );
+                            }
+                        }
+                        error = operand_layer.backward_propagate(error, cache, lr);
                     } else {
-                        let (_, cache) = self.store.consume_operand4d(operand_id).expect(cache_err);
-                        shaped_error =
-                            operand_layer.backward_propagate(shaped_error, cache, self.lr);
+                        let (_, mut cache) = store
+                            .as_mut()
+                            .unwrap()
+                            .consume_operand4d(operand_id)
+                            .expect(cache_err);
+                        if let Some(ref mut skip_layers) = skip_layers {
+                            if let Some(skip_layers) = skip_layers.get_mut(&operand_id) {
+                                (_, cache.skip_actvns) = Self::backward_propagate(
+                                    Tensor::Tensor4d(cache.skip_actvns),
+                                    skip_layers,
+                                    None,
+                                    None,
+                                    lr,
+                                );
+                            }
+                        }
+                        shaped_error = operand_layer.backward_propagate(shaped_error, cache, lr);
                     }
                 }
                 LayerType::Operation(operation_layer) => {
                     let operand_id = operation_layer.operand_id();
                     if operation_layer.input_shape().len() == 2 {
-                        let (operand_id, mut cache) =
-                            self.store.consume_operand2d(operand_id).expect(cache_err);
-                        (error, cache) = operation_layer.backward_propagate(error, cache, self.lr);
-                        self.store.add_operand2d(operand_id, cache);
+                        let (operand_id, mut cache) = store
+                            .as_mut()
+                            .unwrap()
+                            .consume_operand2d(operand_id)
+                            .expect(cache_err);
+                        (error, cache) = operation_layer.backward_propagate(error, cache, lr);
+                        store.as_mut().unwrap().add_operand2d(operand_id, cache);
                     } else {
-                        let (operand_id, mut cache) =
-                            self.store.consume_operand4d(operand_id).expect(cache_err);
+                        let (operand_id, mut cache) = store
+                            .as_mut()
+                            .unwrap()
+                            .consume_operand4d(operand_id)
+                            .expect(cache_err);
                         (shaped_error, cache) =
-                            operation_layer.backward_propagate(shaped_error, cache, self.lr);
-                        self.store.add_operand4d(operand_id, cache);
+                            operation_layer.backward_propagate(shaped_error, cache, lr);
+                        store.as_mut().unwrap().add_operand4d(operand_id, cache);
                     }
                 }
                 LayerType::Reshape(reshape_layer) => {
-                    error = reshape_layer.backward_propagate(&shaped_error, self.lr);
+                    error = reshape_layer.backward_propagate(&shaped_error, lr);
                 }
             }
         }
+        (error, shaped_error)
     }
 
     fn prepare_training_labels(&self, labels: &Labels) -> Array1<f64> {
@@ -876,6 +974,10 @@ impl CNN {
 
     fn add_layer(&mut self, layer: LayerType) {
         self.layers.push(layer);
+    }
+
+    fn add_skip_layer(&mut self, skip_id: usize, layers: Vec<LayerType>) {
+        self.skip_layers.insert(skip_id, layers);
     }
 
     fn save(&self, file_name: &str) {
