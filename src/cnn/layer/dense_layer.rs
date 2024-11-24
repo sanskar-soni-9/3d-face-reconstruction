@@ -1,7 +1,7 @@
 use crate::config::DENSE_WEIGHT_SCALE;
 use ndarray::{s, Array1, Array2, Array3, Axis};
 use rand::Rng;
-use rand_distr::Uniform;
+use rand_distr::Normal;
 use rayon::prelude::*;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -16,8 +16,8 @@ pub struct DenseLayer {
 
 impl DenseLayer {
     pub fn new(input_shape: (usize, usize), output_size: usize, bias: f64) -> Self {
-        let limit = (3.0 * (DENSE_WEIGHT_SCALE / input_shape.1 as f64)).sqrt();
-        let normal_distr = Uniform::new(-limit, limit);
+        let limit = (DENSE_WEIGHT_SCALE / input_shape.1 as f64).sqrt();
+        let normal_distr = Normal::new(0., limit).unwrap();
         let mut rng = rand::thread_rng();
 
         let mut weights: Array2<f64> = Array2::zeros((output_size, input_shape.1));

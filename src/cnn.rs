@@ -66,6 +66,121 @@ impl CNN {
         .to_owned()
     }
 
+    /// Reference implementation
+    /// - [keras-applications](https://github.com/keras-team/keras-applications/blob/master/keras_applications/resnet_common.py)
+    fn add_resnet_v2_block(
+        &mut self,
+        mut input_shape: (usize, usize, usize, usize),
+        filters: usize,
+        kernel_size: usize,
+        strides: usize,
+        conv_shortcut: bool,
+    ) -> (usize, usize, usize, usize) {
+        let mut skip_id = self.layers.len() - 1;
+        if conv_shortcut {
+            skip_id += 2;
+        } else {
+            self.add_layer(LayerType::Operand(OperandLayer::new(
+                skip_id,
+                vec![input_shape.0, input_shape.1, input_shape.2, input_shape.3],
+            )));
+        }
+
+        self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
+        self.add_activation_layer(Activation::ReLU);
+
+        if conv_shortcut {
+            self.add_layer(LayerType::Operand(OperandLayer::new(
+                skip_id,
+                vec![input_shape.0, input_shape.1, input_shape.2, input_shape.3],
+            )));
+            let layer =
+                ConvolutionalLayer::new(filters * 4, 1, strides, input_shape, Some(0.), false);
+            self.add_skip_layer(skip_id, vec![LayerType::Convolutional(layer)]);
+        } else if strides > 1 {
+            let layer = MaxPoolingLayer::new(1, input_shape, strides, true);
+            self.add_skip_layer(skip_id, vec![LayerType::MaxPooling(layer)]);
+        }
+
+        let layer = ConvolutionalLayer::new(filters, 1, 1, input_shape, None, false);
+        input_shape = layer.output_shape();
+        self.add_layer(LayerType::Convolutional(layer));
+        self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
+        self.add_activation_layer(Activation::ReLU);
+
+        let layer = ConvolutionalLayer::new(filters, kernel_size, strides, input_shape, None, true);
+        input_shape = layer.output_shape();
+        self.add_layer(LayerType::Convolutional(layer));
+        self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
+        self.add_activation_layer(Activation::ReLU);
+
+        let layer = ConvolutionalLayer::new(filters * 4, 1, 1, input_shape, Some(0.), false);
+        input_shape = layer.output_shape();
+        self.add_layer(LayerType::Convolutional(layer));
+
+        self.add_layer(LayerType::Operation(OperationLayer::new(
+            skip_id,
+            vec![input_shape.0, input_shape.1, input_shape.2, input_shape.3],
+            OperationType::Add,
+        )));
+        input_shape
+    }
+
+    pub fn stack_resnet_v2_blocks(&mut self, filters: usize, strides: usize, blocks: usize) {
+        let error_msg = "Add resnet block after a convolutional or max pool layer.";
+        let mut input_shape = match self.layers.last() {
+            Some(layer) => match layer {
+                LayerType::Activation(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 4 {
+                        (shape[0], shape[1], shape[2], shape[3])
+                    } else {
+                        panic!("{}", error_msg);
+                    }
+                }
+                LayerType::BatchNorm(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 4 {
+                        (shape[0], shape[1], shape[2], shape[3])
+                    } else {
+                        panic!("{}", error_msg);
+                    }
+                }
+                LayerType::Convolutional(layer) => layer.output_shape(),
+                LayerType::Dropout(layer) => {
+                    let shape = layer.input_shape();
+                    if shape.len() == 4 {
+                        (shape[0], shape[1], shape[2], shape[3])
+                    } else {
+                        panic!("{}", error_msg);
+                    }
+                }
+                LayerType::MaxPooling(layer) => layer.output_shape(),
+                LayerType::Operand(layer) => {
+                    let shape = layer.input_shape();
+                    (shape[0], shape[1], shape[2], shape[3])
+                }
+                LayerType::Operation(layer) => {
+                    let shape = layer.input_shape();
+                    (shape[0], shape[1], shape[2], shape[3])
+                }
+                LayerType::Reshape(layer) => layer.output_shape(),
+                _ => panic!("{}", error_msg),
+            },
+            None => (
+                self.mini_batch_size,
+                INPUT_SHAPE.0,
+                INPUT_SHAPE.1,
+                INPUT_SHAPE.2,
+            ),
+        };
+        input_shape = self.add_resnet_v2_block(input_shape, filters, 3, 1, true);
+        for _ in 2..blocks {
+            input_shape = self.add_resnet_v2_block(input_shape, filters, 3, 1, false);
+        }
+        self.add_resnet_v2_block(input_shape, filters, 3, strides, false);
+    }
+
     pub fn add_activation_layer(&mut self, activation: Activation) {
         let input_shape = match self.layers.last() {
             Some(layer) => match layer {
