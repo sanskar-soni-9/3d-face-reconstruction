@@ -6,7 +6,7 @@ use crate::dataset::Labels;
 use activation::Activation;
 use cache::CNNCache;
 use layer::*;
-use ndarray::{s, Array1, Array2, Array3, Array4, Dim};
+use ndarray::{s, Array1, Array2, Array3, Array4, Axis, Dim};
 use rand::seq::SliceRandom;
 use rand_distr::num_traits::Zero;
 use serde::{Deserialize, Serialize};
@@ -798,10 +798,15 @@ impl CNN {
                     .for_each(|(idx, mut err)| {
                         err.assign(&(&prediction.slice(s![idx, ..]) - &training_labels[idx]));
                     });
-                println!("PREDICTION: {:?}\nERROR: {:?}\n", prediction, error);
+                let mse = error.powi(2).mean_axis(Axis(1)).unwrap().mean_axis(Axis(0));
+                let mse_grd = &error * 2. / error.shape().iter().product::<usize>() as f64;
+                println!(
+                    "PREDICTION: {:?}\nERROR: {:?}\nMSE: {:?}\n",
+                    prediction, error, mse
+                );
 
                 Self::backward_propagate(
-                    Tensor::Tensor2d(error),
+                    Tensor::Tensor2d(mse_grd),
                     &mut self.layers,
                     Some(&mut self.skip_layers),
                     Some(&mut store),
