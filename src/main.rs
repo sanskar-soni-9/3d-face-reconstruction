@@ -13,14 +13,10 @@ fn main() {
         }
         "train" => {
             let mut model: Option<&str> = None;
-            let mut lr: Option<&str> = None;
-            if args.len() >= 4 {
-                lr = Some(args[3].as_str());
-            }
             if args.len() >= 3 {
                 model = Some(args[2].as_str());
             }
-            train_model(model, lr);
+            train_model(model);
         }
         "infer" => {
             println!("ARGS: {:?}", args);
@@ -45,10 +41,10 @@ fn infer_model(model: &str, images: Vec<String>) {
     face_reconstruction::infer(model, images);
 }
 
-fn train_model(model: Option<&str>, lr: Option<&str>) {
+fn train_model(model: Option<&str>) {
     let dataset = Dataset::load().unwrap_or_else(|_| {
         println!("CSV file not found, preparing dataset...");
         prepare_data()
     });
-    face_reconstruction::train(model, dataset, 10, lr);
+    face_reconstruction::train(model, dataset, 10);
 }

@@ -1,5 +1,8 @@
-use crate::config::DENSE_WEIGHT_SCALE;
-use ndarray::{s, Array1, Array2, Array3, Axis};
+use crate::{
+    cnn::optimizer::{Optimizer, OptimizerType},
+    config::DENSE_WEIGHT_SCALE,
+};
+use ndarray::{s, Array1, Array2, Array3, Axis, Dim, IntoDimension};
 use rand::Rng;
 use rand_distr::Normal;
 use rayon::prelude::*;
@@ -12,10 +15,17 @@ pub struct DenseLayer {
     output_shape: (usize, usize),
     #[serde(skip)]
     input: Array2<f64>,
+    w_optimizer: Optimizer<Dim<[usize; 2]>>,
+    b_optimizer: Optimizer<Dim<[usize; 1]>>,
 }
 
 impl DenseLayer {
-    pub fn new(input_shape: (usize, usize), output_size: usize, bias: f64) -> Self {
+    pub fn new(
+        input_shape: (usize, usize),
+        output_size: usize,
+        bias: f64,
+        optimizer_type: &OptimizerType,
+    ) -> Self {
         let limit = (DENSE_WEIGHT_SCALE / input_shape.1 as f64).sqrt();
         let normal_distr = Normal::new(0., limit).unwrap();
         let mut rng = rand::thread_rng();
@@ -27,6 +37,8 @@ impl DenseLayer {
         let biases: Array1<f64> = Array1::from_elem(output_size, bias);
 
         DenseLayer {
+            w_optimizer: optimizer_type.init(weights.dim().into_dimension()),
+            b_optimizer: optimizer_type.init(biases.dim().into_dimension()),
             weights,
             biases,
             output_shape: (input_shape.0, output_size),
@@ -40,11 +52,10 @@ impl DenseLayer {
         self.calculate_output(&self.input)
     }
 
-    pub fn backward_propagate(&mut self, error: Array2<f64>, lr: f64) -> Array2<f64> {
+    pub fn backward_propagate(&mut self, error: Array2<f64>) -> Array2<f64> {
         let next_error = self.calculate_next_err(&error);
-
-        self.weights -= &(self.calculate_delta_w(&error) * lr);
-        self.biases -= &(error.mean_axis(Axis(0)).unwrap() * lr);
+        self.weights -= self.w_optimizer.optimize(self.calculate_delta_w(&error));
+        self.biases -= self.b_optimizer.optimize(self.calculate_delta_b(&error));
         next_error
     }
 
@@ -109,5 +120,9 @@ impl DenseLayer {
                     });
             });
         weight_grads.mean_axis(Axis(0)).unwrap()
+    }
+
+    fn calculate_delta_b(&self, err: &Array2<f64>) -> Array1<f64> {
+        err.mean_axis(Axis(0)).unwrap()
     }
 }

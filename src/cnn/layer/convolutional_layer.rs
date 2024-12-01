@@ -1,5 +1,8 @@
-use crate::config::CONV_WEIGHT_SCALE;
-use ndarray::{s, Array1, Array4, Array5, Axis};
+use crate::{
+    cnn::optimizer::{Optimizer, OptimizerType},
+    config::CONV_WEIGHT_SCALE,
+};
+use ndarray::{s, Array1, Array4, Array5, Axis, Dim, IntoDimension};
 use rand::Rng;
 use rand_distr::Normal;
 use rayon::prelude::*;
@@ -15,6 +18,8 @@ pub struct ConvolutionalLayer {
     output_shape: Tensor4DShape, // (batch, filters, height, width)
     kernels: Array4<f64>,
     biases: Array1<f64>,
+    k_optimizer: Optimizer<Dim<[usize; 4]>>,
+    b_optimizer: Optimizer<Dim<[usize; 1]>>,
     use_bias: bool,
     #[serde(skip)]
     input: Array4<f64>,
@@ -29,6 +34,7 @@ impl ConvolutionalLayer {
         mut input_shape: Tensor4DShape,
         bias: Option<f64>,
         padding: bool,
+        optimizer_type: &OptimizerType,
     ) -> Self {
         if strides == 0 {
             panic!("Conv: Stride should be greater than 0.");
@@ -90,6 +96,8 @@ impl ConvolutionalLayer {
             kernel_shape,
             strides,
             input_shape,
+            k_optimizer: optimizer_type.init(kernels.dim().into_dimension()),
+            b_optimizer: optimizer_type.init(biases.dim().into_dimension()),
             kernels,
             output_shape,
             input: Array4::zeros((0, 0, 0, 0)),
@@ -104,11 +112,11 @@ impl ConvolutionalLayer {
         self.calculate_output(&self.input)
     }
 
-    pub fn backward_propagate(&mut self, error: Array4<f64>, lr: f64) -> Array4<f64> {
+    pub fn backward_propagate(&mut self, error: Array4<f64>) -> Array4<f64> {
         let next_error = self.calculate_next_err(&error);
-        self.kernels -= &(self.calculate_delta_k(&error) * lr);
+        self.kernels -= self.k_optimizer.optimize(self.calculate_delta_k(&error));
         if self.use_bias {
-            self.biases -= &(self.calculate_delta_b(&error) * lr);
+            self.biases -= self.b_optimizer.optimize(self.calculate_delta_b(&error));
         }
         next_error
     }

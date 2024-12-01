@@ -29,7 +29,7 @@ impl ReshapeLayer {
         }
     }
 
-    pub fn backward_propagate(&self, error: &Array4<f64>, _lr: f64) -> Array2<f64> {
+    pub fn backward_propagate(&self, error: &Array4<f64>) -> Array2<f64> {
         error.to_owned().remove_axis(Axis(3)).remove_axis(Axis(2))
     }
 

@@ -1,4 +1,5 @@
-use ndarray::{aview0, Array, Array1, Axis, Dim, Dimension, RemoveAxis};
+use crate::cnn::optimizer::{Optimizer, OptimizerType};
+use ndarray::{aview0, Array, Array1, Axis, Dim, Dimension, IntoDimension, RemoveAxis};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -11,6 +12,8 @@ pub struct BatchNormLayer {
     momentum: f64,
     moving_mean: Array1<f64>,
     moving_variance: Array1<f64>,
+    g_optimizer: Optimizer<Dim<[usize; 1]>>,
+    b_optimizer: Optimizer<Dim<[usize; 1]>>,
 }
 
 pub struct BNCache<D>
@@ -24,7 +27,13 @@ where
 }
 
 impl BatchNormLayer {
-    pub fn new(axis: usize, epsilon: f64, input_shape: Vec<usize>, momentum: f64) -> Self {
+    pub fn new(
+        axis: usize,
+        epsilon: f64,
+        input_shape: Vec<usize>,
+        momentum: f64,
+        optimizer_type: &OptimizerType,
+    ) -> Self {
         let axis_size = input_shape[axis];
         BatchNormLayer {
             axis,
@@ -35,6 +44,8 @@ impl BatchNormLayer {
             momentum,
             moving_mean: Array1::zeros(axis_size),
             moving_variance: Array1::zeros(axis_size),
+            g_optimizer: optimizer_type.init(axis_size.into_dimension()),
+            b_optimizer: optimizer_type.init(axis_size.into_dimension()),
         }
     }
 
@@ -91,7 +102,6 @@ impl BatchNormLayer {
         &mut self,
         error: Array<f64, D>,
         cache: BNCache<D>,
-        lr: f64,
     ) -> Array<f64, D>
     where
         D: Dimension + RemoveAxis,
@@ -110,10 +120,18 @@ impl BatchNormLayer {
         let d_x = d_xhat * &cache.var_inv + &d_var * 2. * &cache.xmu / m + &d_mu / m;
 
         let d_gamma = self.sum_across_axes(&error * cache.xhat, self.axis);
-        self.update_gamma(&d_gamma, lr);
+        self.gamma -= self
+            .g_optimizer
+            .optimize(Array1::from_shape_fn(self.gamma.dim(), |idx| {
+                *d_gamma.index_axis(Axis(self.axis), idx).first().unwrap()
+            }));
 
         let d_beta = self.sum_across_axes(error, self.axis);
-        self.update_beta(&d_beta, lr);
+        self.beta -= self
+            .b_optimizer
+            .optimize(Array1::from_shape_fn(self.beta.dim(), |idx| {
+                *d_beta.index_axis(Axis(self.axis), idx).first().unwrap()
+            }));
 
         d_x
     }
@@ -142,28 +160,6 @@ impl BatchNormLayer {
             .for_each(|(mvng_var, var)| {
                 *mvng_var = *mvng_var * self.momentum + var.first().unwrap() * (1. - self.momentum)
             });
-    }
-
-    fn update_beta<D>(&mut self, beta_grad: &Array<f64, D>, lr: f64)
-    where
-        D: Dimension + RemoveAxis,
-    {
-        self.beta
-            .iter_mut()
-            .zip(beta_grad.axis_iter(Axis(self.axis)))
-            .par_bridge()
-            .for_each(|(beta, beta_grd)| *beta -= beta_grd.first().unwrap() * lr);
-    }
-
-    fn update_gamma<D>(&mut self, gamma_grad: &Array<f64, D>, lr: f64)
-    where
-        D: Dimension + RemoveAxis,
-    {
-        self.gamma
-            .iter_mut()
-            .zip(gamma_grad.axis_iter(Axis(self.axis)))
-            .par_bridge()
-            .for_each(|(gamma, gamma_grd)| *gamma -= gamma_grd.first().unwrap() * lr);
     }
 
     fn scale_and_shift<D>(&self, mut activations: Array<f64, D>) -> Array<f64, D>

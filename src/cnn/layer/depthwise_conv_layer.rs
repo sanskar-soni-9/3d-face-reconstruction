@@ -1,5 +1,8 @@
-use crate::config::CONV_WEIGHT_SCALE;
-use ndarray::{s, Array1, Array3, Array4, Axis};
+use crate::{
+    cnn::optimizer::{Optimizer, OptimizerType},
+    config::CONV_WEIGHT_SCALE,
+};
+use ndarray::{s, Array1, Array3, Array4, Axis, Dim, IntoDimension};
 use rand::Rng;
 use rand_distr::Normal;
 use rayon::prelude::*;
@@ -19,6 +22,8 @@ pub struct DepthwiseConvolutionalLayer {
     #[serde(skip)]
     input: Array4<f64>,
     padding: Tensor4DShape, // (left, right, top, bottom)
+    k_optimizer: Optimizer<Dim<[usize; 3]>>,
+    b_optimizer: Optimizer<Dim<[usize; 1]>>,
 }
 
 impl DepthwiseConvolutionalLayer {
@@ -28,6 +33,7 @@ impl DepthwiseConvolutionalLayer {
         mut input_shape: Tensor4DShape,
         bias: Option<f64>,
         padding: bool,
+        optimizer_type: &OptimizerType,
     ) -> Self {
         if strides == 0 {
             panic!("Depth: Stride should be greater than 0.");
@@ -91,6 +97,8 @@ impl DepthwiseConvolutionalLayer {
             strides,
             input_shape,
             output_shape,
+            k_optimizer: optimizer_type.init(kernels.dim().into_dimension()),
+            b_optimizer: optimizer_type.init(biases.dim().into_dimension()),
             kernels,
             use_bias,
             biases,
@@ -104,11 +112,11 @@ impl DepthwiseConvolutionalLayer {
         self.calculate_output(&self.input)
     }
 
-    pub fn backward_propagate(&mut self, error: Array4<f64>, lr: f64) -> Array4<f64> {
+    pub fn backward_propagate(&mut self, error: Array4<f64>) -> Array4<f64> {
         let next_error = self.calculate_next_err(&error);
-        self.kernels -= &(self.calculate_delta_k(&error) * lr);
+        self.kernels -= self.k_optimizer.optimize(self.calculate_delta_k(&error));
         if self.use_bias {
-            self.biases -= &(self.calculate_delta_b(&error) * lr);
+            self.biases -= self.b_optimizer.optimize(self.calculate_delta_b(&error));
         }
         next_error
     }

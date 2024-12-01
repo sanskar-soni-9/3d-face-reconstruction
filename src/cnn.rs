@@ -1,6 +1,5 @@
 use crate::config::{
-    BATCH_EPSILON, DEFAULT_LEARNING_RATE, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, NORM_MOMENTUM,
-    TRAINIG_LABELS,
+    BATCH_EPSILON, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, NORM_MOMENTUM, TRAINIG_LABELS,
 };
 use crate::dataset::Labels;
 use activation::Activation;
@@ -16,6 +15,7 @@ use std::io::{Read, Write};
 pub mod activation;
 mod cache;
 mod layer;
+pub mod optimizer;
 
 enum Tensor {
     Tensor4d(Array4<f64>),
@@ -32,11 +32,16 @@ pub struct CNN {
     #[serde(skip)]
     data: Vec<Array3<f64>>,
     #[serde(skip)]
-    lr: f64,
+    optimizer: optimizer::OptimizerType,
 }
 
 impl CNN {
-    pub fn new(mini_batch_size: usize, epochs: usize, inputs: Vec<Array3<f64>>, lr: f64) -> Self {
+    pub fn new(
+        mini_batch_size: usize,
+        epochs: usize,
+        inputs: Vec<Array3<f64>>,
+        optimizer: optimizer::OptimizerType,
+    ) -> Self {
         CNN {
             mini_batch_size,
             layers: vec![],
@@ -44,7 +49,7 @@ impl CNN {
             epochs,
             cur_epoch: 0,
             data: inputs,
-            lr,
+            optimizer,
         }
     }
 
@@ -94,27 +99,51 @@ impl CNN {
                 skip_id,
                 vec![input_shape.0, input_shape.1, input_shape.2, input_shape.3],
             )));
-            let layer =
-                ConvolutionalLayer::new(filters * 4, 1, strides, input_shape, Some(0.), false);
+            let layer = ConvolutionalLayer::new(
+                filters * 4,
+                1,
+                strides,
+                input_shape,
+                Some(0.),
+                false,
+                &self.optimizer,
+            );
             self.add_skip_layer(skip_id, vec![LayerType::Convolutional(layer)]);
         } else if strides > 1 {
             let layer = MaxPoolingLayer::new(1, input_shape, strides, true);
             self.add_skip_layer(skip_id, vec![LayerType::MaxPooling(layer)]);
         }
 
-        let layer = ConvolutionalLayer::new(filters, 1, 1, input_shape, None, false);
+        let layer =
+            ConvolutionalLayer::new(filters, 1, 1, input_shape, None, false, &self.optimizer);
         input_shape = layer.output_shape();
         self.add_layer(LayerType::Convolutional(layer));
         self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
         self.add_activation_layer(Activation::ReLU);
 
-        let layer = ConvolutionalLayer::new(filters, kernel_size, strides, input_shape, None, true);
+        let layer = ConvolutionalLayer::new(
+            filters,
+            kernel_size,
+            strides,
+            input_shape,
+            None,
+            true,
+            &self.optimizer,
+        );
         input_shape = layer.output_shape();
         self.add_layer(LayerType::Convolutional(layer));
         self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
         self.add_activation_layer(Activation::ReLU);
 
-        let layer = ConvolutionalLayer::new(filters * 4, 1, 1, input_shape, Some(0.), false);
+        let layer = ConvolutionalLayer::new(
+            filters * 4,
+            1,
+            1,
+            input_shape,
+            Some(0.),
+            false,
+            &self.optimizer,
+        );
         input_shape = layer.output_shape();
         self.add_layer(LayerType::Convolutional(layer));
 
@@ -264,6 +293,7 @@ impl CNN {
             epsilon,
             input_shape,
             momentum,
+            &self.optimizer,
         )));
     }
 
@@ -333,6 +363,7 @@ impl CNN {
             input_shape,
             bias,
             add_padding,
+            &self.optimizer,
         )));
     }
 
@@ -417,6 +448,7 @@ impl CNN {
                 input_shape,
                 None,
                 add_padding,
+                &self.optimizer,
             );
             input_shape = layer.output_shape();
             self.add_layer(LayerType::Convolutional(layer));
@@ -425,8 +457,14 @@ impl CNN {
         }
 
         // Depthwise Convolution
-        let layer =
-            DepthwiseConvolutionalLayer::new(kernel_size, strides, input_shape, None, add_padding);
+        let layer = DepthwiseConvolutionalLayer::new(
+            kernel_size,
+            strides,
+            input_shape,
+            None,
+            add_padding,
+            &self.optimizer,
+        );
         input_shape = layer.output_shape();
         self.add_layer(LayerType::DepthwiseConv(layer));
         self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
@@ -450,8 +488,15 @@ impl CNN {
             let mut se_input_shape = layer.output_shape();
             self.add_layer(LayerType::Reshape(layer));
 
-            let layer =
-                ConvolutionalLayer::new(reduced_filters, 1, 1, se_input_shape, Some(0.), true);
+            let layer = ConvolutionalLayer::new(
+                reduced_filters,
+                1,
+                1,
+                se_input_shape,
+                Some(0.),
+                true,
+                &self.optimizer,
+            );
             se_input_shape = layer.output_shape();
             self.add_layer(LayerType::Convolutional(layer));
             self.add_activation_layer(Activation::SiLU);
@@ -463,6 +508,7 @@ impl CNN {
                 se_input_shape,
                 Some(0.),
                 true,
+                &self.optimizer,
             );
             se_input_shape = layer.output_shape();
             self.add_layer(LayerType::Convolutional(layer));
@@ -481,7 +527,15 @@ impl CNN {
         }
 
         // Output
-        let layer = ConvolutionalLayer::new(filters, 1, 1, input_shape, None, add_padding);
+        let layer = ConvolutionalLayer::new(
+            filters,
+            1,
+            1,
+            input_shape,
+            None,
+            add_padding,
+            &self.optimizer,
+        );
         input_shape = layer.output_shape();
         self.add_layer(LayerType::Convolutional(layer));
         self.add_batch_norm_layer(1, BATCH_EPSILON, NORM_MOMENTUM);
@@ -746,6 +800,7 @@ impl CNN {
             input_shape,
             neurons,
             bias,
+            &self.optimizer,
         )));
     }
 
@@ -810,7 +865,6 @@ impl CNN {
                     &mut self.layers,
                     Some(&mut self.skip_layers),
                     Some(&mut store),
-                    self.lr,
                 );
                 let backward_time = std::time::SystemTime::now();
                 println!(
@@ -952,7 +1006,6 @@ impl CNN {
         layers: &mut [LayerType],
         mut skip_layers: Option<&mut HashMap<usize, Vec<LayerType>>>,
         mut store: Option<&mut CNNCache>,
-        lr: f64,
     ) -> (Array2<f64>, Array4<f64>) {
         let cache_err = "No cache found for backpropagation calculations.";
         let (mut shaped_error, mut error) = match error {
@@ -964,34 +1017,34 @@ impl CNN {
             match layer {
                 LayerType::Activation(activation_layer) => {
                     if activation_layer.input_shape().len() == 2 {
-                        error = activation_layer.backward_propagate(error, lr);
+                        error = activation_layer.backward_propagate(error);
                     } else {
-                        shaped_error = activation_layer.backward_propagate(shaped_error, lr);
+                        shaped_error = activation_layer.backward_propagate(shaped_error);
                     }
                 }
                 LayerType::BatchNorm(batchnorm_layer) => {
                     if batchnorm_layer.input_shape().len() == 2 {
                         let cache = store.as_mut().unwrap().consume_bn2().expect(cache_err);
-                        error = batchnorm_layer.backward_propagate(error, cache, lr);
+                        error = batchnorm_layer.backward_propagate(error, cache);
                     } else {
                         let cache = store.as_mut().unwrap().consume_bn4().expect(cache_err);
-                        shaped_error = batchnorm_layer.backward_propagate(shaped_error, cache, lr);
+                        shaped_error = batchnorm_layer.backward_propagate(shaped_error, cache);
                     }
                 }
                 LayerType::Convolutional(convolutional_layer) => {
-                    shaped_error = convolutional_layer.backward_propagate(shaped_error, lr);
+                    shaped_error = convolutional_layer.backward_propagate(shaped_error);
                 }
                 LayerType::Dense(dense_layer) => {
-                    error = dense_layer.backward_propagate(error, lr);
+                    error = dense_layer.backward_propagate(error);
                 }
                 LayerType::DepthwiseConv(depthwise_conv_layer) => {
-                    shaped_error = depthwise_conv_layer.backward_propagate(shaped_error, lr);
+                    shaped_error = depthwise_conv_layer.backward_propagate(shaped_error);
                 }
                 LayerType::Dropout(dropout_layer) => {
                     if dropout_layer.input_shape().len() == 2 {
-                        error = dropout_layer.backward_propagate(error, lr);
+                        error = dropout_layer.backward_propagate(error);
                     } else {
-                        shaped_error = dropout_layer.backward_propagate(shaped_error, lr);
+                        shaped_error = dropout_layer.backward_propagate(shaped_error);
                     }
                 }
                 LayerType::Flatten(flatten_layer) => {
@@ -1018,11 +1071,10 @@ impl CNN {
                                     skip_layers,
                                     None,
                                     None,
-                                    lr,
                                 );
                             }
                         }
-                        error = operand_layer.backward_propagate(error, cache, lr);
+                        error = operand_layer.backward_propagate(error, cache);
                     } else {
                         let (_, mut cache) = store
                             .as_mut()
@@ -1036,11 +1088,10 @@ impl CNN {
                                     skip_layers,
                                     None,
                                     None,
-                                    lr,
                                 );
                             }
                         }
-                        shaped_error = operand_layer.backward_propagate(shaped_error, cache, lr);
+                        shaped_error = operand_layer.backward_propagate(shaped_error, cache);
                     }
                 }
                 LayerType::Operation(operation_layer) => {
@@ -1051,7 +1102,7 @@ impl CNN {
                             .unwrap()
                             .consume_operand2d(operand_id)
                             .expect(cache_err);
-                        (error, cache) = operation_layer.backward_propagate(error, cache, lr);
+                        (error, cache) = operation_layer.backward_propagate(error, cache);
                         store.as_mut().unwrap().add_operand2d(operand_id, cache);
                     } else {
                         let (operand_id, mut cache) = store
@@ -1060,12 +1111,12 @@ impl CNN {
                             .consume_operand4d(operand_id)
                             .expect(cache_err);
                         (shaped_error, cache) =
-                            operation_layer.backward_propagate(shaped_error, cache, lr);
+                            operation_layer.backward_propagate(shaped_error, cache);
                         store.as_mut().unwrap().add_operand4d(operand_id, cache);
                     }
                 }
                 LayerType::Reshape(reshape_layer) => {
-                    error = reshape_layer.backward_propagate(&shaped_error, lr);
+                    error = reshape_layer.backward_propagate(&shaped_error);
                 }
             }
         }
@@ -1120,13 +1171,9 @@ impl CNN {
             .unwrap_or_else(|e| panic!("Error deserializing model: {}\nError: {}", model_path, e))
     }
 
-    pub fn load_with_data(model_path: &str, data: Vec<Array3<f64>>, lr: Option<&str>) -> CNN {
+    pub fn load_with_data(model_path: &str, data: Vec<Array3<f64>>) -> CNN {
         let mut cnn = Self::load(model_path);
         cnn.data = data;
-        cnn.lr = match lr {
-            Some(lr) => lr.parse().expect("Learning rate should be a valid f64"),
-            None => DEFAULT_LEARNING_RATE,
-        };
         cnn
     }
 }

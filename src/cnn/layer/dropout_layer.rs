@@ -43,7 +43,7 @@ impl DropoutLayer {
         input
     }
 
-    pub fn backward_propagate<D>(&self, mut error: Array<f64, D>, _lr: f64) -> Array<f64, D>
+    pub fn backward_propagate<D>(&self, mut error: Array<f64, D>) -> Array<f64, D>
     where
         D: Dimension,
     {

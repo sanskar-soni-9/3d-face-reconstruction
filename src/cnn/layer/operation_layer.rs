@@ -62,7 +62,6 @@ impl OperandLayer {
         &self,
         error_a: Array<f64, D>,
         cache: OperandCache<D>,
-        _lr: f64,
     ) -> Array<f64, D>
     where
         D: Dimension,
@@ -117,7 +116,6 @@ impl OperationLayer {
         &self,
         error: Array<f64, D>,
         mut cache: OperandCache<D>,
-        _lr: f64,
     ) -> (Array<f64, D>, OperandCache<D>)
     where
         D: Dimension,

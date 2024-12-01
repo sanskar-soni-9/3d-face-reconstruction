@@ -1,7 +1,11 @@
-use cnn::{activation::Activation, CNN};
+use cnn::{
+    activation::Activation,
+    optimizer::{OptimizerType, SGDMParameters},
+    CNN,
+};
 use config::{
     BATCH_EPSILON, CNN_OUTPUT_SIZE, DEFAULT_LEARNING_RATE, INPUT_SHAPE, MINI_BATCH_SIZE,
-    NORM_MOMENTUM, OUTPUT_DIR,
+    NORM_MOMENTUM, OUTPUT_DIR, SGD_MOMENTUM,
 };
 use dataset::Dataset;
 use image::{imageops::FilterType, DynamicImage, GenericImage, GenericImageView, Rgba};
@@ -16,7 +20,7 @@ pub mod utils;
 pub fn infer(model: &str, image_paths: Vec<String>) {
     // TODO: temporary
     let images = get_ndimages(&image_paths);
-    let mut cnn = CNN::load_with_data(model, images.clone(), Some("0.0"));
+    let mut cnn = CNN::load_with_data(model, images.clone());
     for (i, image) in image_paths.iter().enumerate() {
         let labels = cnn.infer(i);
         let mut new_img = get_image(image);
@@ -36,7 +40,7 @@ pub fn infer(model: &str, image_paths: Vec<String>) {
     }
 }
 
-pub fn train(model: Option<&str>, data: Dataset, epochs: usize, lr: Option<&str>) {
+pub fn train(model: Option<&str>, data: Dataset, epochs: usize) {
     let mut images = vec![];
     // Temporary
     for label in data.labels.iter().take(80) {
@@ -45,7 +49,7 @@ pub fn train(model: Option<&str>, data: Dataset, epochs: usize, lr: Option<&str>
     }
 
     let mut cnn = match model {
-        Some(model) => CNN::load_with_data(model, images, lr),
+        Some(model) => CNN::load_with_data(model, images),
         None => init_cnn(epochs, images),
     };
     cnn.train(data.labels);
@@ -82,7 +86,15 @@ pub fn get_ndimages(image_paths: &[String]) -> Vec<Array3<f64>> {
 }
 
 fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
-    let mut cnn = cnn::CNN::new(MINI_BATCH_SIZE, epochs, images, DEFAULT_LEARNING_RATE);
+    let mut cnn = cnn::CNN::new(
+        MINI_BATCH_SIZE,
+        epochs,
+        images,
+        OptimizerType::SGDMomentum(SGDMParameters {
+            lr: DEFAULT_LEARNING_RATE,
+            momentum: SGD_MOMENTUM,
+        }),
+    );
 
     // ResNetV2
     cnn.add_convolutional_layer(64, 7, 2, Some(0.), true);
