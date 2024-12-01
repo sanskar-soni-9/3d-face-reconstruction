@@ -54,8 +54,8 @@ impl DenseLayer {
 
     pub fn backward_propagate(&mut self, error: Array2<f64>) -> Array2<f64> {
         let next_error = self.calculate_next_err(&error);
-        self.weights -= self.w_optimizer.optimize(self.calculate_delta_w(&error));
-        self.biases -= self.b_optimizer.optimize(self.calculate_delta_b(&error));
+        self.weights -= &self.w_optimizer.optimize(self.calculate_delta_w(&error));
+        self.biases -= &self.b_optimizer.optimize(self.calculate_delta_b(&error));
         next_error
     }
 

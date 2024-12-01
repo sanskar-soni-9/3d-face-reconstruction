@@ -1,6 +1,6 @@
 use cnn::{
     activation::Activation,
-    optimizer::{OptimizerType, SGDMParameters},
+    optimizer::{OptimizerType, SgdmParameters},
     CNN,
 };
 use config::{
@@ -90,7 +90,7 @@ fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
         MINI_BATCH_SIZE,
         epochs,
         images,
-        OptimizerType::SGDMomentum(SGDMParameters {
+        OptimizerType::SgdMomentum(SgdmParameters {
             lr: DEFAULT_LEARNING_RATE,
             momentum: SGD_MOMENTUM,
         }),

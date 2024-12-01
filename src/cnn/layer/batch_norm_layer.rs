@@ -120,14 +120,14 @@ impl BatchNormLayer {
         let d_x = d_xhat * &cache.var_inv + &d_var * 2. * &cache.xmu / m + &d_mu / m;
 
         let d_gamma = self.sum_across_axes(&error * cache.xhat, self.axis);
-        self.gamma -= self
+        self.gamma -= &self
             .g_optimizer
             .optimize(Array1::from_shape_fn(self.gamma.dim(), |idx| {
                 *d_gamma.index_axis(Axis(self.axis), idx).first().unwrap()
             }));
 
         let d_beta = self.sum_across_axes(error, self.axis);
-        self.beta -= self
+        self.beta -= &self
             .b_optimizer
             .optimize(Array1::from_shape_fn(self.beta.dim(), |idx| {
                 *d_beta.index_axis(Axis(self.axis), idx).first().unwrap()

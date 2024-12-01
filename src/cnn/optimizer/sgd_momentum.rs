@@ -1,13 +1,13 @@
 use ndarray::{Array, Dimension};
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct SGDMParameters {
+pub struct SgdmParameters {
     pub lr: f64,
     pub momentum: f64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct SGDMomentum<D>
+pub struct SgdMomentum<D>
 where
     D: Dimension,
 {
@@ -16,11 +16,11 @@ where
     changes: Array<f64, D>,
 }
 
-impl<D> SGDMomentum<D>
+impl<D> SgdMomentum<D>
 where
     D: Dimension,
 {
-    pub fn new(params: &SGDMParameters, shape: D) -> Self {
+    pub fn new(params: &SgdmParameters, shape: D) -> Self {
         Self {
             lr: params.lr,
             momentum: params.momentum,
@@ -28,8 +28,8 @@ where
         }
     }
 
-    pub fn optimize(&mut self, changes: Array<f64, D>) -> &Array<f64, D> {
+    pub fn optimize(&mut self, changes: Array<f64, D>) -> Array<f64, D> {
         self.changes = changes * self.lr + &self.changes * self.momentum;
-        &self.changes
+        self.changes.clone()
     }
 }
