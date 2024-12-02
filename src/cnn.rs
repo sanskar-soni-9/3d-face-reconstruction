@@ -1,5 +1,5 @@
 use crate::config::{
-    BATCH_EPSILON, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, NORM_MOMENTUM, TRAINIG_LABELS,
+    BATCH_EPSILON, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, NORM_MOMENTUM, PRETTY_SAVE, TRAINIG_LABELS,
 };
 use crate::dataset::Labels;
 use activation::Activation;
@@ -1154,8 +1154,18 @@ impl CNN {
     fn save(&self, file_name: &str) {
         let mut model_file = std::fs::File::create(format!("{}/{}", MODELS_DIR, file_name,))
             .unwrap_or_else(|e| panic!("Error creating model file: {}\nError: {}", file_name, e));
-        let json = serde_json::to_string(&self)
-            .unwrap_or_else(|e| panic!("Error serializing model: {}\nError: {}", file_name, e));
+        let json = if PRETTY_SAVE {
+            serde_json::to_string_pretty(&self).unwrap_or_else(|e| {
+                panic!(
+                    "Error while pretty serializing model: {}\nError: {}",
+                    file_name, e
+                )
+            })
+        } else {
+            serde_json::to_string(&self).unwrap_or_else(|e| {
+                panic!("Error while serializing model: {}\nError: {}", file_name, e)
+            })
+        };
         model_file
             .write_all(json.as_bytes())
             .unwrap_or_else(|e| panic!("Error writing to model file: {}\nError: {}", file_name, e));

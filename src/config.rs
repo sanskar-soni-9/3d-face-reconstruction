@@ -26,6 +26,7 @@ pub const TRAINIG_LABELS: [&str; 1] = [
 pub const CNN_OUTPUT_SIZE: usize = 136;
 pub const CONV_WEIGHT_SCALE: f64 = 2.;
 pub const DENSE_WEIGHT_SCALE: f64 = 2.;
+pub const PRETTY_SAVE: bool = false;
 
 // Dirs & Paths
 pub const OUTPUT_DIR: &str = "results";
