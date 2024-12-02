@@ -1,12 +1,9 @@
 use cnn::{
     activation::Activation,
-    optimizer::{OptimizerType, SgdmParameters},
+    optimizer::{AdamParameters, OptimizerType},
     CNN,
 };
-use config::{
-    BATCH_EPSILON, CNN_OUTPUT_SIZE, DEFAULT_LEARNING_RATE, INPUT_SHAPE, MINI_BATCH_SIZE,
-    NORM_MOMENTUM, OUTPUT_DIR, SGD_MOMENTUM,
-};
+use config::*;
 use dataset::Dataset;
 use image::{imageops::FilterType, DynamicImage, GenericImage, GenericImageView, Rgba};
 use ndarray::Array3;
@@ -90,9 +87,12 @@ fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
         MINI_BATCH_SIZE,
         epochs,
         images,
-        OptimizerType::SgdMomentum(SgdmParameters {
+        OptimizerType::Adam(AdamParameters {
             lr: DEFAULT_LEARNING_RATE,
-            momentum: SGD_MOMENTUM,
+            beta_1: ADAM_BETA_1,
+            beta_2: ADAM_BETA_2,
+            epsilon: ADAM_EPSILON,
+            ams_grad: ADAM_USE_AMS_GRAD,
         }),
     );
 

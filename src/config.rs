@@ -17,6 +17,12 @@ pub const MINI_BATCH_SIZE: usize = 3;
 pub const DROPOUT_RATE: f64 = 0.2;
 pub const NORM_MOMENTUM: f64 = 0.99;
 
+// Adam
+pub const ADAM_BETA_1: f64 = 0.9;
+pub const ADAM_BETA_2: f64 = 0.999;
+pub const ADAM_EPSILON: f64 = 1e-8;
+pub const ADAM_USE_AMS_GRAD: bool = false;
+
 // Sgd with momentum
 pub const SGD_MOMENTUM: f64 = 0.9;
 
