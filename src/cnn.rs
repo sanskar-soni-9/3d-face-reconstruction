@@ -31,18 +31,20 @@ pub struct CNN {
     cur_epoch: usize,
     #[serde(skip)]
     data: Vec<Array3<f64>>,
-    #[serde(skip)]
+    lr: f64,
     optimizer: optimizer::OptimizerType,
 }
 
 impl CNN {
     pub fn new(
+        lr: f64,
         mini_batch_size: usize,
         epochs: usize,
         inputs: Vec<Array3<f64>>,
         optimizer: optimizer::OptimizerType,
     ) -> Self {
         CNN {
+            lr,
             mini_batch_size,
             layers: vec![],
             skip_layers: HashMap::default(),
@@ -865,6 +867,7 @@ impl CNN {
                     &mut self.layers,
                     Some(&mut self.skip_layers),
                     Some(&mut store),
+                    self.lr,
                 );
                 let backward_time = std::time::SystemTime::now();
                 println!(
@@ -1006,6 +1009,7 @@ impl CNN {
         layers: &mut [LayerType],
         mut skip_layers: Option<&mut HashMap<usize, Vec<LayerType>>>,
         mut store: Option<&mut CNNCache>,
+        lr: f64,
     ) -> (Array2<f64>, Array4<f64>) {
         let cache_err = "No cache found for backpropagation calculations.";
         let (mut shaped_error, mut error) = match error {
@@ -1025,20 +1029,20 @@ impl CNN {
                 LayerType::BatchNorm(batchnorm_layer) => {
                     if batchnorm_layer.input_shape().len() == 2 {
                         let cache = store.as_mut().unwrap().consume_bn2().expect(cache_err);
-                        error = batchnorm_layer.backward_propagate(error, cache);
+                        error = batchnorm_layer.backward_propagate(error, cache, lr);
                     } else {
                         let cache = store.as_mut().unwrap().consume_bn4().expect(cache_err);
-                        shaped_error = batchnorm_layer.backward_propagate(shaped_error, cache);
+                        shaped_error = batchnorm_layer.backward_propagate(shaped_error, cache, lr);
                     }
                 }
                 LayerType::Convolutional(convolutional_layer) => {
-                    shaped_error = convolutional_layer.backward_propagate(shaped_error);
+                    shaped_error = convolutional_layer.backward_propagate(shaped_error, lr);
                 }
                 LayerType::Dense(dense_layer) => {
-                    error = dense_layer.backward_propagate(error);
+                    error = dense_layer.backward_propagate(error, lr);
                 }
                 LayerType::DepthwiseConv(depthwise_conv_layer) => {
-                    shaped_error = depthwise_conv_layer.backward_propagate(shaped_error);
+                    shaped_error = depthwise_conv_layer.backward_propagate(shaped_error, lr);
                 }
                 LayerType::Dropout(dropout_layer) => {
                     if dropout_layer.input_shape().len() == 2 {
@@ -1071,6 +1075,7 @@ impl CNN {
                                     skip_layers,
                                     None,
                                     None,
+                                    lr,
                                 );
                             }
                         }
@@ -1088,6 +1093,7 @@ impl CNN {
                                     skip_layers,
                                     None,
                                     None,
+                                    lr,
                                 );
                             }
                         }

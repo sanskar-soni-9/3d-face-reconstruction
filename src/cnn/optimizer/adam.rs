@@ -3,7 +3,6 @@ use ndarray::{Array, Dimension};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct AdamParameters {
-    pub lr: f64,
     pub epsilon: f64,
     pub beta_1: f64,
     pub beta_2: f64,
@@ -15,7 +14,6 @@ pub struct Adam<D>
 where
     D: Dimension,
 {
-    lr: f64,
     epsilon: f64,
     beta_1: f64,
     beta_2: f64,
@@ -32,7 +30,6 @@ where
 {
     pub fn new(params: &AdamParameters, shape: D) -> Self {
         Self {
-            lr: params.lr,
             epsilon: params.epsilon,
             beta_1: params.beta_1,
             beta_2: params.beta_2,
@@ -44,7 +41,7 @@ where
         }
     }
 
-    pub fn optimize(&mut self, changes: Array<f64, D>) -> Array<f64, D>
+    pub fn optimize(&mut self, changes: Array<f64, D>, lr: f64) -> Array<f64, D>
     where
         D: Dimension,
     {
@@ -61,6 +58,6 @@ where
             &v_hat
         };
 
-        m_hat * self.lr / (v.sqrt() + self.epsilon)
+        m_hat * lr / (v.sqrt() + self.epsilon)
     }
 }

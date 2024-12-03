@@ -2,7 +2,6 @@ use ndarray::{Array, Dimension};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct SgdmParameters {
-    pub lr: f64,
     pub momentum: f64,
 }
 
@@ -11,7 +10,6 @@ pub struct SgdMomentum<D>
 where
     D: Dimension,
 {
-    lr: f64,
     momentum: f64,
     changes: Array<f64, D>,
 }
@@ -22,14 +20,13 @@ where
 {
     pub fn new(params: &SgdmParameters, shape: D) -> Self {
         Self {
-            lr: params.lr,
             momentum: params.momentum,
             changes: Array::default(shape),
         }
     }
 
-    pub fn optimize(&mut self, changes: Array<f64, D>) -> Array<f64, D> {
-        self.changes = changes * self.lr + &self.changes * self.momentum;
+    pub fn optimize(&mut self, changes: Array<f64, D>, lr: f64) -> Array<f64, D> {
+        self.changes = changes * lr + &self.changes * self.momentum;
         self.changes.clone()
     }
 }

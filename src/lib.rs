@@ -84,11 +84,11 @@ pub fn get_ndimages(image_paths: &[String]) -> Vec<Array3<f64>> {
 
 fn init_cnn(epochs: usize, images: Vec<Array3<f64>>) -> cnn::CNN {
     let mut cnn = cnn::CNN::new(
+        DEFAULT_LEARNING_RATE,
         MINI_BATCH_SIZE,
         epochs,
         images,
         OptimizerType::Adam(AdamParameters {
-            lr: DEFAULT_LEARNING_RATE,
             beta_1: ADAM_BETA_1,
             beta_2: ADAM_BETA_2,
             epsilon: ADAM_EPSILON,

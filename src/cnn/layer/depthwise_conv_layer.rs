@@ -112,11 +112,15 @@ impl DepthwiseConvolutionalLayer {
         self.calculate_output(&self.input)
     }
 
-    pub fn backward_propagate(&mut self, error: Array4<f64>) -> Array4<f64> {
+    pub fn backward_propagate(&mut self, error: Array4<f64>, lr: f64) -> Array4<f64> {
         let next_error = self.calculate_next_err(&error);
-        self.kernels -= &self.k_optimizer.optimize(self.calculate_delta_k(&error));
+        self.kernels -= &self
+            .k_optimizer
+            .optimize(self.calculate_delta_k(&error), lr);
         if self.use_bias {
-            self.biases -= &self.b_optimizer.optimize(self.calculate_delta_b(&error));
+            self.biases -= &self
+                .b_optimizer
+                .optimize(self.calculate_delta_b(&error), lr);
         }
         next_error
     }
