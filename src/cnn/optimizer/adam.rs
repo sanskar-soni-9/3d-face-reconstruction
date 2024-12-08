@@ -19,9 +19,8 @@ where
     beta_2: f64,
     momentum: Array<f64, D>,
     velocity: Array<f64, D>,
-    max_velocity: Array<f64, D>,
+    max_velocity: Option<Array<f64, D>>,
     iteration_num: usize,
-    ams_grad: bool,
 }
 
 impl<D> Adam<D>
@@ -29,15 +28,19 @@ where
     D: Dimension,
 {
     pub fn new(params: &AdamParameters, shape: D) -> Self {
+        let max_velocity = if params.ams_grad {
+            Some(Array::zeros(shape.clone()))
+        } else {
+            None
+        };
         Self {
             epsilon: params.epsilon,
             beta_1: params.beta_1,
             beta_2: params.beta_2,
             momentum: Array::zeros(shape.clone()),
-            velocity: Array::zeros(shape.clone()),
-            max_velocity: Array::zeros(shape),
+            velocity: Array::zeros(shape),
+            max_velocity,
             iteration_num: 0,
-            ams_grad: params.ams_grad,
         }
     }
 
@@ -51,9 +54,9 @@ where
 
         let m_hat = &self.momentum / (1. - self.beta_1.powi(self.iteration_num as i32));
         let v_hat = &self.velocity / (1. - self.beta_2.powi(self.iteration_num as i32));
-        let v = if self.ams_grad {
-            self.max_velocity = elementwise_max(&self.max_velocity, &v_hat);
-            &self.max_velocity
+        let v = if let Some(max_velocity) = &mut self.max_velocity {
+            *max_velocity = elementwise_max(max_velocity, &v_hat);
+            max_velocity
         } else {
             &v_hat
         };
