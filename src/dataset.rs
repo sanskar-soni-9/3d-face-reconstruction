@@ -1,6 +1,7 @@
 use crate::config::{DATASET_INPUT_SIZE, DATA_DIR, INPUT_SHAPE};
-use crate::utils::*;
+use crate::{utils::*, TRAINIG_LABELS};
 use core::panic;
+use ndarray::Array1;
 use rayon::prelude::*;
 use serde::{ser::SerializeStruct, Serialize};
 use std::fs;
@@ -44,35 +45,55 @@ impl Labels {
     pub fn image_path(&self) -> &str {
         &self.image_path
     }
-    pub fn color_para(&self) -> [f64; 7] {
-        self.color_para
+    pub fn color_para(&self) -> &[f64; 7] {
+        &self.color_para
     }
-    pub fn exp_para(&self) -> [f64; 29] {
-        self.exp_para
+    pub fn exp_para(&self) -> &[f64; 29] {
+        &self.exp_para
     }
-    pub fn illum_para(&self) -> [f64; 10] {
-        self.illum_para
+    pub fn illum_para(&self) -> &[f64; 10] {
+        &self.illum_para
     }
-    pub fn pose_para(&self) -> [f64; 7] {
-        self.pose_para
+    pub fn pose_para(&self) -> &[f64; 7] {
+        &self.pose_para
     }
-    pub fn shape_para(&self) -> [f64; 199] {
-        self.shape_para
+    pub fn shape_para(&self) -> &[f64; 199] {
+        &self.shape_para
     }
-    pub fn tex_para(&self) -> [f64; 199] {
-        self.tex_para
+    pub fn tex_para(&self) -> &[f64; 199] {
+        &self.tex_para
     }
-    pub fn roi(&self) -> [f64; 4] {
-        self.roi
+    pub fn roi(&self) -> &[f64; 4] {
+        &self.roi
     }
-    pub fn pt2d(&self) -> [f64; 136] {
-        self.pt2d
+    pub fn pt2d(&self) -> &[f64; 136] {
+        &self.pt2d
     }
-    pub fn pts_2d(&self) -> [f64; 136] {
-        self.pts_2d
+    pub fn pts_2d(&self) -> &[f64; 136] {
+        &self.pts_2d
     }
-    pub fn pts_3d(&self) -> [f64; 136] {
-        self.pts_3d
+    pub fn pts_3d(&self) -> &[f64; 136] {
+        &self.pts_3d
+    }
+
+    pub fn as_training_array(&self) -> Array1<f64> {
+        Array1::from_iter(
+            TRAINIG_LABELS
+                .iter()
+                .flat_map(|train_label| match *train_label {
+                    "pts_2d" => self.pts_2d.iter().copied(),
+                    "pts_3d" => self.pts_3d.iter().copied(),
+                    "pose_para" => self.pose_para.iter().copied(),
+                    "shape_para" => self.shape_para.iter().copied(),
+                    "illum_para" => self.illum_para.iter().copied(),
+                    "color_para" => self.color_para.iter().copied(),
+                    "exp_para" => self.exp_para.iter().copied(),
+                    "tex_para" => self.tex_para.iter().copied(),
+                    "pt2d" => self.pt2d.iter().copied(),
+                    "roi" => self.roi.iter().copied(),
+                    _ => panic!("Unknown Label: {:?}", train_label),
+                }),
+        )
     }
 }
 

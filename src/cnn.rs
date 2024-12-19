@@ -1,5 +1,5 @@
 use crate::config::{
-    BATCH_EPSILON, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, NORM_MOMENTUM, PRETTY_SAVE, TRAINIG_LABELS,
+    BATCH_EPSILON, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, NORM_MOMENTUM, PRETTY_SAVE,
 };
 use crate::dataset::Labels;
 use activation::Activation;
@@ -825,14 +825,14 @@ impl CNN {
                     input
                         .slice_mut(s![batch_i, .., .., ..])
                         .assign(&self.data[*data_i]);
-                    training_labels.push(self.prepare_training_labels(&labels[*data_i]));
+                    training_labels.push(labels[*data_i].as_training_array());
                 }
                 for pad_i in batch.len()..self.mini_batch_size {
                     let data_i = shuffled_batch.choose(&mut rng).unwrap();
                     input
                         .slice_mut(s![pad_i, .., .., ..])
                         .assign(&self.data[*data_i]);
-                    training_labels.push(self.prepare_training_labels(&labels[*data_i]));
+                    training_labels.push(labels[*data_i].as_training_array());
                 }
 
                 let start_time = std::time::SystemTime::now();
@@ -1127,26 +1127,6 @@ impl CNN {
             }
         }
         (error, shaped_error)
-    }
-
-    fn prepare_training_labels(&self, labels: &Labels) -> Array1<f64> {
-        let mut training_labels: Vec<f64> = vec![];
-        for train_label in TRAINIG_LABELS {
-            match train_label {
-                "pts_2d" => training_labels.append(&mut labels.pts_2d().to_vec()),
-                "pts_3d" => training_labels.append(&mut labels.pts_3d().to_vec()),
-                "pose_para" => training_labels.append(&mut labels.pose_para().to_vec()),
-                "shape_para" => training_labels.append(&mut labels.shape_para().to_vec()),
-                "illum_para" => training_labels.append(&mut labels.illum_para().to_vec()),
-                "color_para" => training_labels.append(&mut labels.color_para().to_vec()),
-                "exp_para" => training_labels.append(&mut labels.exp_para().to_vec()),
-                "tex_para" => training_labels.append(&mut labels.tex_para().to_vec()),
-                "pt2d" => training_labels.append(&mut labels.pts_2d().to_vec()),
-                "roi" => training_labels.append(&mut labels.roi().to_vec()),
-                _ => panic!("Unknown Label: {:?}", train_label),
-            }
-        }
-        Array1::from_vec(training_labels)
     }
 
     fn add_layer(&mut self, layer: LayerType) {
