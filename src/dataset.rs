@@ -76,6 +76,24 @@ impl Labels {
         &self.pts_3d
     }
 
+    pub fn training_size(&self) -> usize {
+        TRAINIG_LABELS.iter().fold(0, |acc, val| {
+            acc + match *val {
+                "pts_2d" => self.pts_2d.len(),
+                "pts_3d" => self.pts_3d.len(),
+                "pose_para" => self.pose_para.len(),
+                "shape_para" => self.shape_para.len(),
+                "illum_para" => self.illum_para.len(),
+                "color_para" => self.color_para.len(),
+                "exp_para" => self.exp_para.len(),
+                "tex_para" => self.tex_para.len(),
+                "pt2d" => self.pt2d.len(),
+                "roi" => self.roi.len(),
+                _ => 0,
+            }
+        })
+    }
+
     pub fn as_training_array(&self) -> Array1<f64> {
         Array1::from_iter(
             TRAINIG_LABELS

@@ -1,16 +1,18 @@
-use crate::config::{
-    BATCH_EPSILON, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, NORM_MOMENTUM, PRETTY_SAVE,
+use crate::{
+    config::{BATCH_EPSILON, EPOCH_MODEL, INPUT_SHAPE, MODELS_DIR, NORM_MOMENTUM, PRETTY_SAVE},
+    data_loader::DataLoader,
+    dataset::Labels,
 };
-use crate::dataset::Labels;
 use activation::Activation;
 use cache::CNNCache;
 use layer::*;
-use ndarray::{s, Array1, Array2, Array3, Array4, Axis, Dim};
-use rand::seq::SliceRandom;
+use ndarray::{Array2, Array4, Axis, Dim};
 use rand_distr::num_traits::Zero;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::{
+    collections::HashMap,
+    io::{Read, Write},
+};
 
 pub mod activation;
 mod cache;
@@ -29,10 +31,9 @@ pub struct CNN {
     skip_layers: HashMap<usize, Vec<LayerType>>,
     epochs: usize,
     cur_epoch: usize,
-    #[serde(skip)]
-    data: Vec<Array3<f64>>,
     lr: f64,
     optimizer: optimizer::OptimizerType,
+    training_data_percent: f64,
 }
 
 impl CNN {
@@ -40,7 +41,7 @@ impl CNN {
         lr: f64,
         mini_batch_size: usize,
         epochs: usize,
-        inputs: Vec<Array3<f64>>,
+        training_data_percent: Option<f64>,
         optimizer: optimizer::OptimizerType,
     ) -> Self {
         CNN {
@@ -50,27 +51,9 @@ impl CNN {
             skip_layers: HashMap::default(),
             epochs,
             cur_epoch: 0,
-            data: inputs,
             optimizer,
+            training_data_percent: training_data_percent.unwrap_or(0.8),
         }
-    }
-
-    pub fn infer(&mut self, img_num: usize) -> Array1<f64> {
-        let img_shape = self.data[img_num].shape();
-        let mut input: Array4<f64> = Array4::zeros((1, img_shape[0], img_shape[1], img_shape[2]));
-        input
-            .slice_mut(s![0, .., .., ..])
-            .assign(&self.data[img_num]);
-
-        Self::forward_propagate(
-            Tensor::Tensor4d(input),
-            &mut self.layers,
-            Some(&mut self.skip_layers),
-            false,
-        )
-        .1
-        .slice(s![0, ..])
-        .to_owned()
     }
 
     /// Reference implementation
@@ -806,35 +789,14 @@ impl CNN {
         )));
     }
 
-    pub fn train(&mut self, labels: Vec<Labels>) {
+    pub fn train(&mut self, mut labels: Vec<Labels>) {
+        let train_labels_range =
+            0..(labels.len() as f64 * self.training_data_percent).floor() as usize;
+        let mut training_data_loader =
+            DataLoader::new(self.mini_batch_size, true, &mut labels[train_labels_range]);
+
         for e in self.cur_epoch..self.epochs {
-            let mut rng = rand::thread_rng();
-            let mut shuffled_batch: Vec<_> = (0..self.data.len()).collect();
-            shuffled_batch.shuffle(&mut rng);
-            for batch in shuffled_batch.chunks(self.mini_batch_size) {
-                let mut input: Array4<f64> = Array4::zeros((
-                    self.mini_batch_size,
-                    INPUT_SHAPE.0,
-                    INPUT_SHAPE.1,
-                    INPUT_SHAPE.2,
-                ));
-                let mut training_labels: Vec<Array1<f64>> =
-                    Vec::with_capacity(self.mini_batch_size);
-
-                for (batch_i, data_i) in batch.iter().enumerate() {
-                    input
-                        .slice_mut(s![batch_i, .., .., ..])
-                        .assign(&self.data[*data_i]);
-                    training_labels.push(labels[*data_i].as_training_array());
-                }
-                for pad_i in batch.len()..self.mini_batch_size {
-                    let data_i = shuffled_batch.choose(&mut rng).unwrap();
-                    input
-                        .slice_mut(s![pad_i, .., .., ..])
-                        .assign(&self.data[*data_i]);
-                    training_labels.push(labels[*data_i].as_training_array());
-                }
-
+            for (input, training_labels) in training_data_loader.by_ref() {
                 let start_time = std::time::SystemTime::now();
                 let (_, prediction, mut store) = Self::forward_propagate(
                     Tensor::Tensor4d(input),
@@ -848,13 +810,7 @@ impl CNN {
                     forward_time.duration_since(start_time)
                 );
 
-                let mut error: Array2<f64> = Array2::zeros(prediction.raw_dim());
-                error
-                    .outer_iter_mut()
-                    .enumerate()
-                    .for_each(|(idx, mut err)| {
-                        err.assign(&(&prediction.slice(s![idx, ..]) - &training_labels[idx]));
-                    });
+                let error: Array2<f64> = &prediction - &training_labels;
                 let mse = error.powi(2).mean_axis(Axis(1)).unwrap().mean_axis(Axis(0));
                 let mse_grd = &error * 2. / error.shape().iter().product::<usize>() as f64;
                 println!(
@@ -876,6 +832,7 @@ impl CNN {
                     backward_time.duration_since(start_time)
                 );
             }
+            training_data_loader.reset_iter();
             self.cur_epoch = e + 1;
             println!("Epoch {} complete saving model.\n", self.cur_epoch);
             self.save(&format!("{}{}", EPOCH_MODEL, self.cur_epoch));
@@ -1165,11 +1122,5 @@ impl CNN {
             .unwrap_or_else(|e| panic!("Error reading model file: {}\nError: {}", model_path, e));
         serde_json::from_str(&model)
             .unwrap_or_else(|e| panic!("Error deserializing model: {}\nError: {}", model_path, e))
-    }
-
-    pub fn load_with_data(model_path: &str, data: Vec<Array3<f64>>) -> CNN {
-        let mut cnn = Self::load(model_path);
-        cnn.data = data;
-        cnn
     }
 }

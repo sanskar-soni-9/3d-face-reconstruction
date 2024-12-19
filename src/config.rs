@@ -16,6 +16,8 @@ pub const DEFAULT_LEARNING_RATE: f64 = 0.0001;
 pub const MINI_BATCH_SIZE: usize = 3;
 pub const DROPOUT_RATE: f64 = 0.2;
 pub const NORM_MOMENTUM: f64 = 0.99;
+pub const TRAINING_DATA_PERCENT: f64 = 0.8;
+pub const TOTAL_EPOCHS: usize = 200;
 
 // Adam
 pub const ADAM_BETA_1: f64 = 0.9;
