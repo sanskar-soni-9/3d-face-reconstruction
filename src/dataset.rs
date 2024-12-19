@@ -1,5 +1,5 @@
 use crate::config::{DATASET_INPUT_SIZE, DATA_DIR, INPUT_SHAPE};
-use crate::{utils::*, TRAINIG_LABELS};
+use crate::{utils::*, TRAINING_LABELS};
 use core::panic;
 use ndarray::Array1;
 use rayon::prelude::*;
@@ -77,7 +77,7 @@ impl Labels {
     }
 
     pub fn training_size(&self) -> usize {
-        TRAINIG_LABELS.iter().fold(0, |acc, val| {
+        TRAINING_LABELS.iter().fold(0, |acc, val| {
             acc + match *val {
                 "pts_2d" => self.pts_2d.len(),
                 "pts_3d" => self.pts_3d.len(),
@@ -96,7 +96,7 @@ impl Labels {
 
     pub fn as_training_array(&self) -> Array1<f64> {
         Array1::from_iter(
-            TRAINIG_LABELS
+            TRAINING_LABELS
                 .iter()
                 .flat_map(|train_label| match *train_label {
                     "pts_2d" => self.pts_2d.iter().copied(),

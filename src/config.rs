@@ -29,7 +29,7 @@ pub const ADAM_USE_AMS_GRAD: bool = false;
 pub const SGD_MOMENTUM: f64 = 0.9;
 
 /// Training labels
-pub const TRAINIG_LABELS: [&str; 1] = [
+pub const TRAINING_LABELS: [&str; 1] = [
     "pts_2d", // 136
              // "pt2d",       // 136
              // "pts_3d",     // 136
