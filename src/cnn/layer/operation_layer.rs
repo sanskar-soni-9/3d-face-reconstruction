@@ -37,6 +37,10 @@ impl OperandLayer {
     pub fn input_shape(&self) -> &[usize] {
         &self.input_shape
     }
+
+    pub fn output_shape(&self) -> &[usize] {
+        &self.input_shape
+    }
     pub fn id(&self) -> usize {
         self.id
     }
@@ -87,6 +91,10 @@ impl OperationLayer {
     }
 
     pub fn input_shape(&self) -> &[usize] {
+        &self.input_shape
+    }
+
+    pub fn output_shape(&self) -> &[usize] {
         &self.input_shape
     }
     pub fn operand_id(&self) -> usize {

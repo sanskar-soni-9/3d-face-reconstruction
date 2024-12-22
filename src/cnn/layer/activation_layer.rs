@@ -45,7 +45,11 @@ impl ActivationLayer {
         error
     }
 
-    pub fn input_shape(&self) -> &Vec<usize> {
+    pub fn input_shape(&self) -> &[usize] {
+        &self.input_shape
+    }
+
+    pub fn output_shape(&self) -> &[usize] {
         &self.input_shape
     }
 }

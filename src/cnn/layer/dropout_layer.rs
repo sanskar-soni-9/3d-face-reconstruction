@@ -58,4 +58,8 @@ impl DropoutLayer {
     pub fn input_shape(&self) -> &[usize] {
         &self.input_shape
     }
+
+    pub fn output_shape(&self) -> &[usize] {
+        &self.input_shape
+    }
 }

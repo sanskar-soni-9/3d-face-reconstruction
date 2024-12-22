@@ -53,6 +53,10 @@ impl BatchNormLayer {
         &self.input_shape
     }
 
+    pub fn output_shape(&self) -> &[usize] {
+        &self.input_shape
+    }
+
     pub fn forward_propagate<D>(
         &mut self,
         mut activations: Array<f64, D>,

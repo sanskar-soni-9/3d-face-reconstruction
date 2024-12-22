@@ -43,11 +43,10 @@ impl FlattenLayer {
         next_err
     }
 
-    pub fn input_shape(&self) -> (usize, usize, usize, usize) {
-        self.input_shape
-    }
-
-    pub fn output_size(&self) -> usize {
-        self.input_shape.1 * self.input_shape.2 * self.input_shape.3
+    pub fn output_shape(&self) -> (usize, usize) {
+        (
+            self.input_shape.0,
+            self.input_shape.1 * self.input_shape.2 * self.input_shape.3,
+        )
     }
 }
