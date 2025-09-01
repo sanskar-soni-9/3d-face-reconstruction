@@ -1,24 +1,31 @@
+use clap::{Parser, Subcommand};
 use face_reconstruction::dataset::Dataset;
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
-        panic!("Invalid args...");
-    }
+#[derive(Parser)]
+#[command(version, about, long_about=None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
 
-    match args[1].as_str() {
-        "prepare" => {
+#[derive(Subcommand)]
+enum Commands {
+    /// Prepare dataset
+    Prepare,
+
+    /// Train existing or new model
+    Train { model: Option<String> },
+}
+
+fn main() {
+    let cli = Cli::parse();
+
+    match &cli.command {
+        Commands::Prepare => {
             prepare_data();
         }
-        "train" => {
-            let mut model: Option<&str> = None;
-            if args.len() >= 3 {
-                model = Some(args[2].as_str());
-            }
-            train_model(model);
-        }
-        _ => {
-            panic!("Invalid args...");
+        Commands::Train { model } => {
+            train_model(model.as_deref());
         }
     }
 }
