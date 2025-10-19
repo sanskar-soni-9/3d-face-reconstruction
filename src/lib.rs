@@ -27,7 +27,7 @@ pub fn get_image(image_path: &str) -> DynamicImage {
     let mut image = match image::open(image_path) {
         Ok(image) => image,
         Err(message) => {
-            println!("Failed to read image: {}\nError: {}", image_path, message);
+            println!("Failed to read image: {image_path}\nError: {message}");
             panic!("Error opnening image.");
         }
     };

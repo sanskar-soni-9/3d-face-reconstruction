@@ -17,6 +17,7 @@ pub struct CNNCache {
     operand4d_store: HashMap<usize, Layer4>,
 }
 
+#[allow(dead_code)]
 impl CNNCache {
     pub fn clear(&mut self) {
         self.bn2d_store.clear();
