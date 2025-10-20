@@ -324,7 +324,7 @@ impl Dataset {
                     "roi" => {
                         roi = match array.data() {
                             matfile::NumericData::Int16 { real, imag: _ } => {
-                                vec_i16_to_array_f64(real)
+                                Self::scale_and_normalize(vec_i16_to_array_f64(real))
                             }
                             _ => panic!("Unexpected Data"),
                         };
@@ -377,7 +377,7 @@ impl Dataset {
         let scale_factor = INPUT_SHAPE.1 as f64 / DATASET_INPUT_SIZE as f64;
         labels
             .par_iter_mut()
-            .for_each(|label| *label *= scale_factor / INPUT_SHAPE.1 as f64);
+            .for_each(|label| *label = ((*label * scale_factor) / INPUT_SHAPE.1 as f64) * 2. - 1.);
         labels
     }
 }
